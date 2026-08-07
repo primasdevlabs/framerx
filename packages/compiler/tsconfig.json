@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "references": [
+    { "path": "../ast" },
+    { "path": "../shared" },
+    { "path": "../parser" },
+    { "path": "../generators" },
+    { "path": "../formatter" },
+    { "path": "../zip" }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

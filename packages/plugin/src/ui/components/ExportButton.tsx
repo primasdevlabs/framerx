@@ -1,0 +1,23 @@
+import { usePluginStore } from '../../store/plugin-store';
+
+interface ExportButtonProps {
+    canExport: boolean;
+    onExport: () => void;
+}
+
+export function ExportButton({ canExport, onExport }: ExportButtonProps) {
+    const status = usePluginStore((state) => state.status);
+    const isCompiling = status === 'compiling';
+    const isReady = status === 'ready';
+
+    const label = isCompiling ? 'Compiling…' : isReady ? 'Export again' : 'Export Project';
+    const className = `fx-export${isReady ? ' fx-export--success' : ''}`;
+
+    return (
+        <button type="button" className={className} disabled={!canExport} onClick={onExport}>
+            {isCompiling && <span className="fx-spinner" aria-hidden="true" />}
+            {isReady && <span aria-hidden="true">✓</span>}
+            {label}
+        </button>
+    );
+}
