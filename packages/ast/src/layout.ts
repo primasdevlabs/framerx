@@ -124,6 +124,18 @@ export interface ResponsiveOverride {
         opacity?: number;
     };
     visible?: boolean;
+    /**
+     * The alternate image for this tier (a responsive image swap folded from
+     * a breakpoint/variant replica). `src: ''` means the image is REMOVED at
+     * this tier (the fill is cleared, not swapped).
+     */
+    image?: {
+        src: string;
+        /** The alternate object-fit (CSS background-size for fill swaps). */
+        fit?: 'fill' | 'contain' | 'cover' | 'none' | 'scale-down';
+        /** The alternate object-position (CSS background-position). */
+        position?: string;
+    };
 }
 
 /** The complete layout definition for a node. */

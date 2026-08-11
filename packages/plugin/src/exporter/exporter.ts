@@ -150,6 +150,18 @@ async function fetchRemoteAssets(document: FramerDocument): Promise<void> {
             }
         }
 
+        // ── Responsive image overrides: alternate images folded into the
+        //    primary's per-breakpoint behavior (a replica's image swap). The
+        //    bytes resolved by getData survive the fold; remote-only alternates
+        //    need the same URL fetch fallback as any other image.
+        if (node.responsive && typeof node.responsive === 'object') {
+            for (const override of Object.values(node.responsive as Record<string, { image?: { src?: string } }>)) {
+                if (override?.image?.src) {
+                    addRef(override.image.src, override.image as Record<string, unknown>, 'data');
+                }
+            }
+        }
+
         // ── Component / slot props containing remote asset URLs ───────────────
         if (node.props && typeof node.props === 'object') {
             for (const [propKey, val] of Object.entries(node.props as Record<string, unknown>)) {

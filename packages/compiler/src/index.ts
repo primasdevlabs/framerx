@@ -171,6 +171,7 @@ export async function compile(document: DesignDocument, options: CompileOptions 
         },
         assets: { discovered: buildAssets(ast).discoveredCount, unique: buildAssets(ast).uniqueCount },
         fonts: ast.fonts.length,
+        replicas: manifestReplicas(options.source),
         components: componentSummary,
         validation: { valid: validation.valid, warnings: validation.warnings.length, errors: validation.errors.length },
     });
@@ -209,6 +210,7 @@ export async function compile(document: DesignDocument, options: CompileOptions 
         },
         assets: { discovered: buildAssets(ast).discoveredCount, unique: buildAssets(ast).uniqueCount },
         fonts: ast.fonts.length,
+        replicas: manifestReplicas(options.source),
         components: componentSummary,
         validation: { valid: validation.valid, warnings: validation.warnings.length, errors: validation.errors.length },
     });
@@ -255,7 +257,32 @@ interface ExtractionMetadata {
     codeFiles?: { status: string; count?: number; reason?: string };
     modules?: { status: string; count?: number; failed?: number; reason?: string };
     fonts?: { status: string; count?: number; failed?: number; reason?: string };
+    images?: { status: string; count?: number; failed?: number; reason?: string };
+    /**
+     * Replica folding outcome: breakpoint/variant override nodes (SDK
+     * `isReplica`) folded into their primary's responsive behavior vs. kept
+     * as independent nodes because they could not be placed.
+     */
+    replicas?: {
+        status: string;
+        count?: number;
+        failed?: number;
+        reason?: string;
+        unresolved?: number;
+        unsupported?: number;
+    };
     unmatchedInstances?: UnmatchedInstanceRecord[];
+    /**
+     * The runtime capability probe: which SDK APIs the export depends on were
+     * actually present on the live SDK objects. Separates "the SDK surface
+     * does not expose the API" (a capability gap — update the plugin SDK)
+     * from "the API exists but this entity genuinely has no downloadable
+     * source" (e.g. a custom font whose url is null).
+     */
+    capabilities?: {
+        getFonts?: { available?: boolean; reason?: string };
+        imageGetData?: { available?: boolean; reason?: string };
+    };
 }
 
 /**
@@ -294,6 +321,38 @@ function extractionWarnings(source: FramerDocument | undefined): Array<{ stage: 
     // Shared-module bundles that failed to fetch: those instances WILL be
     // synthesized, and the report names the exact bundle URLs that could not
     // be read.
+    // Image original bytes could not be resolved from the SDK: `getData()`
+    // threw for some assets (the reasons name the exact URLs + errors), or
+    // the SDK object exposed no getData at all and the image was exported as
+    // a remote reference. `ok` (all images byte-resolved) is silent; the
+    // partial count + reasons explain exactly what fell back to a URL fetch.
+    const images = extraction.images;
+    if (images && images.status !== 'ok' && images.status !== 'unavailable') {
+        // The runtime capability probe separates the two failure families:
+        // the SDK surface never exposed ImageAsset.getData (a capability gap
+        // — every image falls back to a URL fetch) from per-asset failures
+        // (getData threw for specific assets even though the API exists).
+        const imageCapability = extraction.capabilities?.imageGetData;
+        const capabilityGap =
+            imageCapability && !imageCapability.available
+                ? ' The runtime capability probe found no ImageAsset.getData on the SDK image objects — original bytes are unreadable through this SDK surface; URL-fetch fallback is the only path.'
+                : '';
+        warnings.push({
+            stage: 'extraction',
+            message: `Image original bytes could not be resolved from the SDK (${images.status}${images.reason ? `: ${images.reason}` : ''}) — ${images.failed ?? 0} image(s) exported via URL fetch instead of local files.${capabilityGap}`,
+        });
+    }
+    // Replica nodes (breakpoint/variant overrides) that could not be folded
+    // into their primary: they were kept as independent nodes (duplicated
+    // content risk), and the reason names the exact primaries/breakpoints
+    // that failed. `ok` (every replica folded) is silent.
+    const replicas = extraction.replicas;
+    if (replicas && replicas.status !== 'ok') {
+        warnings.push({
+            stage: 'extraction',
+            message: `Replica node(s) (breakpoint/variant overrides) could not be folded into their primary (${replicas.status}${replicas.reason ? `: ${replicas.reason}` : ''}) — ${replicas.failed ?? 0} replica(s) emitted as independent nodes instead of per-breakpoint overrides.`,
+        });
+    }
     // Project fonts could not be collected from the SDK: fonts are then
     // exported as metadata only (no @font-face files). Per-font no-download
     // cases (url: null) are NOT summarized here — the FontRegistry warns for
@@ -334,6 +393,22 @@ function extractionWarnings(source: FramerDocument | undefined): Array<{ stage: 
         });
     }
     return warnings;
+}
+
+/**
+ * The replica folding counts for the export manifest, from the source's
+ * extraction record. Undefined when the source carries no replica record
+ * (the manifest then renders zero-filled counts — deterministic either way).
+ */
+function manifestReplicas(source: FramerDocument | undefined): { discovered: number; folded: number; unresolved: number; unsupported: number } | undefined {
+    if (!source) return undefined;
+    const metadata = source.metadata as { extraction?: ExtractionMetadata } | undefined;
+    const replicas = metadata?.extraction?.replicas;
+    if (!replicas) return undefined;
+    const folded = replicas.count ?? 0;
+    const unresolved = replicas.unresolved ?? 0;
+    const unsupported = replicas.unsupported ?? 0;
+    return { discovered: folded + unresolved, folded, unresolved, unsupported };
 }
 
 /**
@@ -451,6 +526,7 @@ export async function compileWithoutValidation(document: DesignDocument, options
         },
         assets: { discovered: buildAssets(ast).discoveredCount, unique: buildAssets(ast).uniqueCount },
         fonts: ast.fonts.length,
+        replicas: manifestReplicas(options.source),
         components: componentSummary,
         validation: { valid: validation.valid, warnings: validation.warnings.length, errors: validation.errors.length },
     });
@@ -477,6 +553,7 @@ export async function compileWithoutValidation(document: DesignDocument, options
         },
         assets: { discovered: buildAssets(ast).discoveredCount, unique: buildAssets(ast).uniqueCount },
         fonts: ast.fonts.length,
+        replicas: manifestReplicas(options.source),
         components: componentSummary,
         validation: { valid: validation.valid, warnings: validation.warnings.length, errors: validation.errors.length },
     });

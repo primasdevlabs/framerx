@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import type { CapabilityProbe } from '../src/parser/capabilities';
 import { extractFramerDocument } from '../src/parser/document';
 import { parseLayout } from '../src/parser/layout';
 import { parseSdkNode, type ParseContext } from '../src/parser/node';
@@ -1192,5 +1193,396 @@ describe('project fonts', () => {
         expect(document.fonts).toBeUndefined();
         const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
         expect(fonts?.status).toBe('empty');
+    });
+});
+
+describe('image extraction diagnostics (ImageAsset.getData outcomes)', () => {
+    /** A canvas root whose page carries the given image-bearing nodes. */
+    function imagePage(nodes: SdkNode[]): unknown {
+        return {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Site',
+                getChildren: async () => [
+                    {
+                        id: 'page',
+                        name: 'Home',
+                        getChildren: async () => nodes,
+                    },
+                ],
+            }),
+        };
+    }
+
+    /** Read the images extraction record off a parsed document. */
+    function imagesOf(document: { metadata?: Record<string, unknown> }): ExtractionStatus | undefined {
+        return (document.metadata?.extraction as { images?: ExtractionStatus } | undefined)?.images;
+    }
+
+    it('records ok with the count when every image resolved its original bytes via getData', async () => {
+        const api = imagePage([
+            fakeNode({ id: 'img_a', name: 'A', backgroundImage: { id: 'asset_a', url: 'https://cdn.test/a.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
+            fakeNode({ id: 'img_b', name: 'B', backgroundImage: { id: 'asset_b', url: 'https://cdn.test/b.png', getData: async () => ({ bytes: new Uint8Array([2]), mimeType: 'image/png' }) } }),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        expect(imagesOf(document)).toEqual({ status: 'ok', count: 2 });
+    });
+
+    it('records partial with the count when some images expose no getData (URL fetch fallback)', async () => {
+        const api = imagePage([
+            fakeNode({ id: 'img_a', name: 'A', backgroundImage: { id: 'asset_a', url: 'https://cdn.test/a.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
+            // No getData on the object — the documented URL-fetch fallback.
+            fakeNode({ id: 'img_b', name: 'B', backgroundImage: { url: 'https://cdn.test/remote.png' } }),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        const images = imagesOf(document);
+        expect(images?.status).toBe('partial');
+        expect(images?.count).toBe(1);
+        expect(images?.failed).toBe(1);
+        expect(images?.reason).toContain('exposed no getData');
+        expect(images?.reason).toContain('URL fetch');
+    });
+
+    it('records partial with the exact error when getData throws', async () => {
+        const api = imagePage([
+            fakeNode({
+                id: 'img_broken',
+                name: 'Broken',
+                backgroundImage: {
+                    url: 'https://cdn.test/broken.png',
+                    getData: async () => {
+                        throw new Error('engine rejected the read');
+                    },
+                },
+            }),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        const images = imagesOf(document);
+        expect(images?.status).toBe('partial');
+        expect(images?.count).toBe(0);
+        expect(images?.failed).toBe(1);
+        // The reason names the exact URL and error — not a flat "failed".
+        expect(images?.reason).toContain('broken.png');
+        expect(images?.reason).toContain('engine rejected the read');
+    });
+
+    it('records each asset once even when many nodes reference it', async () => {
+        const api = imagePage([
+            fakeNode({ id: 'n1', name: 'A', backgroundImage: { id: 'asset_hero', url: 'https://cdn.test/hero.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
+            fakeNode({ id: 'n2', name: 'B', backgroundImage: { id: 'asset_hero', url: 'https://cdn.test/hero.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        // One asset id → one outcome, not two.
+        expect(imagesOf(document)).toEqual({ status: 'ok', count: 1 });
+    });
+
+    it('omits the images record when the document carries no SDK image assets', async () => {
+        const api = imagePage([fakeNode({ id: 'frame', name: 'Hero Section' })]);
+
+        const document = await extractFramerDocument(api as never);
+        expect(imagesOf(document)).toBeUndefined();
+    });
+});
+
+describe('runtime capability probe', () => {
+    /** A canvas root with no nodes — fonts are probed independently of nodes. */
+    function emptyCanvas(): unknown {
+        return {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Site',
+                getChildren: async () => [],
+            }),
+        };
+    }
+
+    /** A canvas root whose page carries the given image-bearing nodes. */
+    function imagePage(nodes: SdkNode[]): unknown {
+        return {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Site',
+                getChildren: async () => [
+                    {
+                        id: 'page',
+                        name: 'Home',
+                        getChildren: async () => nodes,
+                    },
+                ],
+            }),
+        };
+    }
+
+    /** Read the capability report off a parsed document. */
+    function capabilitiesOf(document: { metadata?: Record<string, unknown> }): { getFonts?: CapabilityProbe; imageGetData?: CapabilityProbe } {
+        return (document.metadata?.extraction as { capabilities?: { getFonts?: CapabilityProbe; imageGetData?: CapabilityProbe } }).capabilities ?? {};
+    }
+
+    it('reports getFonts available when the live SDK object exposes it', async () => {
+        const api = { ...emptyCanvas(), getFonts: async () => [] };
+        const document = await extractFramerDocument(api as never);
+
+        expect(capabilitiesOf(document).getFonts).toEqual({ available: true });
+    });
+
+    it('reports getFonts unavailable as an SDK capability gap, not a font property', async () => {
+        const document = await extractFramerDocument({ ...emptyCanvas() } as never);
+
+        const getFonts = capabilitiesOf(document).getFonts;
+        expect(getFonts?.available).toBe(false);
+        // The probe names itself and classifies the failure as a surface gap.
+        expect(getFonts?.reason).toContain('runtime capability probe');
+        expect(getFonts?.reason).toContain('capability gap');
+        // The fonts status derives from the probe and carries the same framing.
+        const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
+        expect(fonts?.status).toBe('unavailable');
+        expect(fonts?.reason).toContain('capability gap');
+    });
+
+    it('distinguishes the API-gap case from fonts that genuinely have no downloadable source', async () => {
+        const api = {
+            ...emptyCanvas(),
+            getFonts: async () => [
+                { selector: 'custom-1', family: 'Custom Display', weight: null, style: null, url: null },
+            ],
+        };
+        const document = await extractFramerDocument(api as never);
+
+        // The API exists (probe passes) — the partial status is a property of
+        // the font (no downloadable source), explicitly NOT a missing API.
+        expect(capabilitiesOf(document).getFonts).toEqual({ available: true });
+        const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
+        expect(fonts?.status).toBe('partial');
+        expect(fonts?.reason).toContain('no downloadable source');
+        expect(fonts?.reason).toContain('IS available');
+        expect(fonts?.reason).toContain('property of the fonts, not a missing API');
+    });
+
+    it('records imageGetData available when image assets exposed getData', async () => {
+        const api = imagePage([
+            fakeNode({ id: 'i1', name: 'A', backgroundImage: { id: 'a1', url: 'https://cdn.test/a.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
+        ]);
+        const document = await extractFramerDocument(api as never);
+
+        expect(capabilitiesOf(document).imageGetData).toEqual({ available: true });
+    });
+
+    it('records imageGetData unavailable when no asset exposed it (capability gap)', async () => {
+        const api = imagePage([
+            fakeNode({ id: 'i2', name: 'B', backgroundImage: { url: 'https://cdn.test/remote.png' } }),
+        ]);
+        const document = await extractFramerDocument(api as never);
+
+        const imageGetData = capabilitiesOf(document).imageGetData;
+        expect(imageGetData?.available).toBe(false);
+        expect(imageGetData?.reason).toContain('runtime capability probe');
+        expect(imageGetData?.reason).toContain('capability gap');
+    });
+
+    it('omits imageGetData when the document carries no image assets', async () => {
+        const api = imagePage([fakeNode({ id: 'f1', name: 'Hero Section' })]);
+        const document = await extractFramerDocument(api as never);
+
+        expect(capabilitiesOf(document).imageGetData).toBeUndefined();
+    });
+});
+
+describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
+    /** A page whose children are the given top-level nodes. */
+    function page(nodes: SdkNode[]): unknown {
+        return {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Site',
+                getChildren: async () => [
+                    {
+                        id: 'page',
+                        name: 'Home',
+                        getChildren: async () => nodes,
+                    },
+                ],
+            }),
+        };
+    }
+
+    /** A breakpoint tier frame whose children are the replica tree. */
+    function tierFrame(id: string, name: string, children: SdkNode[]): SdkNode {
+        return fakeNode({ id, name, isBreakpoint: true, isPrimaryBreakpoint: false, getChildren: async () => children });
+    }
+
+    it('folds a replica into its primary responsive behavior and prunes it instead of duplicating it', async () => {
+        const api = page([
+            fakeNode({ id: 's1', name: 'Hero', getChildren: async () => [fakeNode({ id: 't1', name: 'Title', getText: async () => 'Hi' })] }),
+            tierFrame('bp_tablet', 'Tablet', [
+                fakeNode({
+                    id: 'r_s1',
+                    name: 'Hero',
+                    isReplica: true,
+                    originalId: 's1',
+                    getRect: async () => ({ x: 0, y: 0, width: 80, height: 120 }),
+                    getChildren: async () => [
+                        // A nested replica with NO overrides — a pure duplicate
+                        // that inherits everything and must also be pruned.
+                        fakeNode({ id: 'r_t1', name: 'Title', isReplica: true, originalId: 't1', getText: async () => 'Hi' }),
+                    ],
+                }),
+            ]),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+
+        // The breakpoint tier frame and BOTH replicas are gone — only the
+        // primary tree ships, with the overrides attached to it.
+        expect(document.nodes.map((n) => n.id)).toEqual(['s1']);
+        expect(document.nodes[0].children?.map((c) => c.id)).toEqual(['t1']);
+        // The replica's width/height override folded into the primary.
+        expect(document.nodes[0].responsive).toEqual({
+            Tablet: { sizing: { width: 80, height: 120 } },
+        });
+        const replicas = (document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas;
+        expect(replicas).toEqual({ status: 'ok', count: 2 });
+    });
+
+    it('folds a visibility override into hideOn-style behavior', async () => {
+        const api = page([
+            fakeNode({ id: 's1', name: 'Hero' }),
+            tierFrame('bp_mobile', 'Mobile', [
+                fakeNode({ id: 'r_s1', name: 'Hero', isReplica: true, originalId: 's1', visible: false }),
+            ]),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        expect(document.nodes.map((n) => n.id)).toEqual(['s1']);
+        expect(document.nodes[0].responsive).toEqual({
+            Mobile: { visible: false },
+        });
+    });
+
+    it('prunes a pure-duplicate replica without emitting any responsive override', async () => {
+        const api = page([
+            fakeNode({ id: 's1', name: 'Hero' }),
+            tierFrame('bp_tablet', 'Tablet', [
+                fakeNode({ id: 'r_s1', name: 'Hero', isReplica: true, originalId: 's1' }),
+            ]),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        expect(document.nodes.map((n) => n.id)).toEqual(['s1']);
+        expect(document.nodes[0].responsive).toBeUndefined();
+    });
+
+    it('keeps a replica whose primary is missing and records it as unresolved', async () => {
+        const api = page([
+            fakeNode({ id: 's1', name: 'Hero' }),
+            tierFrame('bp_tablet', 'Tablet', [
+                fakeNode({ id: 'r_ghost', name: 'Hero', isReplica: true, originalId: 'ghost_primary' }),
+            ]),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        // Never dropped: the orphan replica stays as an independent node.
+        expect(document.nodes.map((n) => n.id)).toEqual(['s1', 'r_ghost']);
+        const replicas = (document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas;
+        expect(replicas?.status).toBe('partial');
+        expect(replicas?.count).toBe(0);
+        expect(replicas?.failed).toBe(1);
+        expect(replicas?.reason).toContain('ghost_primary');
+        expect(replicas?.reason).toContain('kept as independent nodes');
+    });
+
+    it('folds an image swap on a replica into the primary responsive override', async () => {
+        const api = page([
+            fakeNode({ id: 's1', name: 'Hero', backgroundImage: { url: 'https://cdn.test/hero.png' } }),
+            tierFrame('bp_tablet', 'Tablet', [
+                fakeNode({ id: 'r_s1', name: 'Hero', isReplica: true, originalId: 's1', backgroundImage: { url: 'https://cdn.test/hero-tablet.png' } }),
+            ]),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        // The replica is pruned and the swap folds into the primary's tablet
+        // tier — no longer an unsupported kind, never silently dropped.
+        expect(document.nodes.map((n) => n.id)).toEqual(['s1']);
+        const primary = document.nodes[0];
+        expect(primary.responsive?.Tablet?.image?.src).toBe('https://cdn.test/hero-tablet.png');
+        const replicas = (document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas;
+        expect(replicas?.status).toBe('ok');
+        expect(replicas?.count).toBe(1);
+        expect(replicas?.reason).toBeUndefined();
+    });
+
+    it('folds a fill image swap on a frame replica (frame keeps its children)', async () => {
+        const api = page([
+            fakeNode({
+                id: 's1',
+                name: 'Hero',
+                backgroundImage: { url: 'https://cdn.test/hero.png' },
+                getChildren: async () => [fakeNode({ id: 't1', name: 'Title', getText: async () => 'Hi' })],
+            }),
+            tierFrame('bp_tablet', 'Tablet', [
+                fakeNode({
+                    id: 'r_s1',
+                    name: 'Hero',
+                    isReplica: true,
+                    originalId: 's1',
+                    backgroundImage: { url: 'https://cdn.test/hero-tablet.png' },
+                    getChildren: async () => [fakeNode({ id: 'r_t1', name: 'Title', isReplica: true, originalId: 't1', getText: async () => 'Hi' })],
+                }),
+            ]),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        // A frame with children reclassifies to Frame: the image is a fill,
+        // and the swap folds as the tier image override with the fill src.
+        const primary = document.nodes[0];
+        expect(primary.type).toBe('Frame');
+        expect(primary.responsive?.Tablet?.image?.src).toBe('https://cdn.test/hero-tablet.png');
+        const replicas = (document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas;
+        expect(replicas?.status).toBe('ok');
+    });
+
+    it('folds image removal on a replica: frames clear the fill, image nodes hide', async () => {
+        // Frame with a bg fill removed at the tablet tier → `src: ''` (the
+        // generator emits background-image: none; the frame keeps its box).
+        const api = page([
+            fakeNode({
+                id: 's1',
+                name: 'Hero',
+                backgroundImage: { url: 'https://cdn.test/hero.png' },
+                getChildren: async () => [fakeNode({ id: 't1', name: 'Title', getText: async () => 'Hi' })],
+            }),
+            tierFrame('bp_tablet', 'Tablet', [
+                fakeNode({
+                    id: 'r_s1',
+                    name: 'Hero',
+                    isReplica: true,
+                    originalId: 's1',
+                    getChildren: async () => [fakeNode({ id: 'r_t1', name: 'Title', isReplica: true, originalId: 't1', getText: async () => 'Hi' })],
+                }),
+            ]),
+        ]);
+        const document = await extractFramerDocument(api as never);
+        expect(document.nodes[0].responsive?.Tablet?.image?.src).toBe('');
+
+        // Standalone image node removed at the tablet tier → the node hides
+        // at that tier (no box), which the visible:false machinery renders.
+        const api2 = page([
+            fakeNode({ id: 'i1', name: 'Photo', backgroundImage: { url: 'https://cdn.test/photo.png' } }),
+            tierFrame('bp_tablet', 'Tablet', [
+                fakeNode({ id: 'r_i1', name: 'Photo', isReplica: true, originalId: 'i1' }),
+            ]),
+        ]);
+        const document2 = await extractFramerDocument(api2 as never);
+        expect(document2.nodes[0].type).toBe('Image');
+        expect(document2.nodes[0].responsive?.Tablet?.visible).toBe(false);
+    });
+
+    it('omits the replicas record when the document carries no replicas', async () => {
+        const api = page([fakeNode({ id: 's1', name: 'Hero' })]);
+        const document = await extractFramerDocument(api as never);
+        expect((document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas).toBeUndefined();
     });
 });

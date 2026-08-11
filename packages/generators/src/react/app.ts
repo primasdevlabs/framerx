@@ -88,6 +88,16 @@ img {
     max-width: 100%;
     height: auto;
 }
+
+/*
+ * Responsive image swaps render as <picture><source …/><img …/></picture>.
+ * The <picture> box is removed from layout (display: contents) so the <img>
+ * stays the flex item / positioned element — exactly as it was without the
+ * wrapper — while the <source media> elements pick the tier's image.
+ */
+picture {
+    display: contents;
+}
 `;
 
     return {

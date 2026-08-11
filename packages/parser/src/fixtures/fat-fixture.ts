@@ -726,6 +726,35 @@ const componentSection: FramerNode = {
     children: [bannerInstance, phosphorInstance],
 };
 
+/**
+ * Replica identity: an UNRESOLVED breakpoint/variant override (SDK
+ * `isReplica` + `originalId`) kept as an independent node. Exercises the
+ * `source.isReplica` coverage property end-to-end — the fold normally prunes
+ * resolved replicas, so a replica that reaches the model must still carry
+ * its identity into the AST (metadata.custom.replicaOf) and the manifest's
+ * `replicas` section.
+ */
+const replicaSection: FramerNode = {
+    id: 'replica_orphan',
+    type: 'Frame',
+    name: 'Orphan Replica',
+    frame: { x: 0, y: 0, width: 1440, height: 120 },
+    layout: {
+        strategy: 'flex',
+        direction: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'flex-start',
+        gap: 16,
+        padding: { top: 16, right: 16, bottom: 16, left: 16 },
+        sizing: { widthMode: 'fill', heightMode: 'fixed' },
+    },
+    style: {},
+    // The primary this replica derives from does not exist in the document
+    // (an engine-internal id the extraction could not resolve).
+    source: { platform: 'framer', nodeId: 'replica_orphan', isReplica: true, originalId: 'ghost_primary', breakpointName: 'Tablet' },
+    children: [],
+};
+
 /** The fat fixture document — exercises every registered SourceProperty. */
 export const fatFixtureDocument: FramerDocument = {
     id: 'doc_fat_fixture',
@@ -741,6 +770,7 @@ export const fatFixtureDocument: FramerDocument = {
         assetSection,
         animationSection,
         componentSection,
+        replicaSection,
     ],
     // The document's own breakpoint scale — the reference renderer and the
     // generated responsive.css both consume these exact thresholds.
@@ -749,5 +779,23 @@ export const fatFixtureDocument: FramerDocument = {
         { name: 'md', minWidth: 768 },
         { name: 'lg', minWidth: 1024 },
     ],
-    metadata: { platform: 'framer' },
+    metadata: {
+        platform: 'framer',
+        // The replica above is kept (its primary could not be resolved) — the
+        // extraction record names it so the manifest's `replicas` section and
+        // the diagnostics agree with what the node tree actually carries.
+        extraction: {
+            masters: { status: 'ok', count: 2 },
+            codeFiles: { status: 'ok', count: 1 },
+            fonts: { status: 'ok', count: 3 },
+            replicas: {
+                status: 'partial',
+                count: 0,
+                failed: 1,
+                unresolved: 1,
+                unsupported: 0,
+                reason: "1 replica(s) had no matching primary node ('Orphan Replica' (ghost_primary)) and were kept as independent nodes",
+            },
+        },
+    },
 };

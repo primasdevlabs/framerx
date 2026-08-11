@@ -8,7 +8,7 @@
  * fit-content, `fixed` → the frame's px value.
  */
 
-import type { FramerFill, FramerNode, FramerResponsiveOverride, FramerTypography } from '@framer/compiler-parser';
+import type { FramerFill, FramerImageRef, FramerNode, FramerResponsiveOverride, FramerTypography } from '@framer/compiler-parser';
 
 import type { CssDeclaration } from './types';
 
@@ -26,6 +26,12 @@ export interface EffectiveNodeStyle {
     /** Explicit width/height from a sizing override (px). */
     explicitWidth?: number;
     explicitHeight?: number;
+    /** The alternate image src for this tier (a responsive image swap; '' removes it). */
+    imageSrc?: string;
+    /** The alternate object-fit for an image fill swap. */
+    imageFit?: FramerImageRef['objectFit'];
+    /** The alternate object-position for an image fill swap. */
+    imagePosition?: string;
 }
 
 /** Merge a responsive override into a node's effective style for one tier. */
@@ -74,6 +80,11 @@ export function applyResponsiveOverride(
     if (override.visible !== undefined) {
         style.visible = override.visible;
     }
+    if (override.image) {
+        result.imageSrc = override.image.src;
+        if (override.image.objectFit) result.imageFit = override.image.objectFit;
+        if (override.image.objectPosition) result.imagePosition = override.image.objectPosition;
+    }
 
     return result;
 }
@@ -100,7 +111,46 @@ export function nodeCssWithOverrides(
     if (node.type === 'Text') declarations.push(...typographyCss(node.text?.style));
     declarations.push(...textStyleDeclarations(effective.textStyle));
 
+    // Responsive image swap (folded from a replica's image override), LAST so
+    // it wins over the base fill/background declarations — matching the
+    // generated responsive.css. Standalone `<img>` nodes swap the SRC via the
+    // `<picture><source media>` element in the markup (NOT CSS content: url(),
+    // which would drop object-fit); a tier's object-fit/position change is
+    // re-asserted here. Frames with an image fill swap the background layer
+    // here (`src: ''` clears it).
+    if (effective.imageSrc !== undefined || effective.imageFit !== undefined || effective.imagePosition !== undefined) {
+        if (node.type === 'Image') {
+            if (effective.imageFit) declarations.push({ property: 'object-fit', value: effective.imageFit });
+            if (effective.imagePosition) declarations.push({ property: 'object-position', value: effective.imagePosition });
+        } else {
+            declarations.push({
+                property: 'background-image',
+                value: effective.imageSrc ? `url("${effective.imageSrc}")` : 'none',
+            });
+            if (effective.imageFit) {
+                declarations.push({ property: 'background-size', value: imageFitSize(effective.imageFit) });
+            }
+            if (effective.imagePosition) {
+                declarations.push({ property: 'background-position', value: effective.imagePosition });
+            }
+        }
+    }
+
     return declarations;
+}
+
+/** CSS background-size for an object-fit value. */
+function imageFitSize(fit: NonNullable<EffectiveNodeStyle['imageFit']>): string {
+    switch (fit) {
+        case 'fill':
+            return '100% 100%';
+        case 'contain':
+            return 'contain';
+        case 'cover':
+            return 'cover';
+        default:
+            return 'auto';
+    }
 }
 
 /** Width/height + padding from the frame and sizing semantics. */

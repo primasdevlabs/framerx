@@ -28,12 +28,12 @@ function node(id: string, name: string, children: DesignNode[] = []): DesignNode
 }
 
 /** Build a design document with the given breakpoints and nodes. */
-function documentWith(breakpoints: DesignDocument['breakpoints'], nodes: DesignNode[]): DesignDocument {
+function documentWith(breakpoints: DesignDocument['breakpoints'], nodes: DesignNode[], assets: DesignDocument['assets'] = []): DesignDocument {
     return {
         version: '1.0.0',
         name: 'Responsive Doc',
         nodes,
-        assets: [],
+        assets,
         fonts: [],
         breakpoints,
     };
@@ -168,6 +168,154 @@ describe('responsive CSS generation', () => {
 
         expect(css!.content).toContain('display: none');
         expect(css!.content).toContain('@media (min-width: 768px)');
+    });
+
+    it('restores display for visible:true overrides (a node hidden at base shown at a tier)', () => {
+        // The static generator emits `hidden` (display: none) for a node whose
+        // base style.visible is false; the tier override visible:true must
+        // re-assert the node's natural display or it stays hidden forever.
+        const flexNode: DesignNode = {
+            ...node('shown', 'Sidebar'),
+            style: { visible: false },
+            layout: {
+                ...node('shown', 'Sidebar').layout,
+                responsive: { breakpoints: { tablet: { visible: true } } },
+            },
+        };
+        const gridNode: DesignNode = {
+            ...node('shown-grid', 'Cards'),
+            style: { visible: false },
+            layout: {
+                ...node('shown-grid', 'Cards').layout,
+                style: { strategy: 'grid' },
+                responsive: { breakpoints: { tablet: { visible: true } } },
+            },
+        };
+        const project = generateProject(
+            documentWith([{ name: 'tablet', minWidth: 768 }], [flexNode, gridNode]),
+        );
+        const css = findFile(project, 'src/styles/responsive.css');
+
+        // Flex node restores to flex; grid node restores to grid.
+        expect(css!.content).toContain('@media (min-width: 768px)');
+        expect(css!.content).toContain('display: flex');
+        expect(css!.content).toContain('display: grid');
+        // Both nodes keep their static `hidden` class (the media rule wins at
+        // the tier because responsive.css is imported after the base sheet).
+        const sidebar = findFile(project, 'src/sections/Sidebar.tsx');
+        expect(sidebar!.content).toContain('hidden');
+        expect(sidebar!.content).toContain('fx-rsp-');
+    });
+
+    it('swaps a standalone image per tier with a <picture><source media> element', () => {
+        const imageNode: DesignNode = {
+            ...node('photo', 'Photo'),
+            type: 'image',
+            asset: { id: 'a-photo', type: 'image', src: 'https://cdn.test/photo.png', name: 'photo' },
+            objectFit: 'cover',
+            layout: {
+                ...node('photo', 'Photo').layout,
+                responsive: { breakpoints: { desktop: { image: { src: 'https://cdn.test/photo-desktop.png' } } } },
+            },
+        };
+        const project = generateProject(
+            documentWith(
+                [{ name: 'desktop', minWidth: 1024 }],
+                [imageNode],
+                [
+                    { id: 'a-photo', type: 'image', src: 'https://cdn.test/photo.png', name: 'photo', fileName: 'photo', extension: 'png', data: new Uint8Array([1]) },
+                    { id: 'a-alt', type: 'image', src: 'https://cdn.test/photo-desktop.png', name: 'photo-desktop', fileName: 'photo-desktop', extension: 'png', data: new Uint8Array([2]) },
+                ],
+            ),
+        );
+        const section = findFile(project, 'src/sections/Photo.tsx');
+        const css = findFile(project, 'src/styles/responsive.css');
+
+        // The tier swap is emitted as <source media> inside a <picture> at the
+        // DOCUMENT's breakpoint width — the <img> keeps src + object-cover so
+        // object-fit stays honored at every tier. The src resolves through the
+        // asset registry to the LOCAL file, never the remote URL.
+        expect(section!.content).toContain('<picture>');
+        expect(section!.content).toContain('<source media="(min-width: 1024px)" srcSet="../assets/images/photo-desktop.png" />');
+        expect(section!.content).toContain('<img src="../assets/images/photo.png"');
+        expect(section!.content).toContain('object-cover');
+        // The swap lives entirely in the markup: no fx-rsp class (the validator
+        // requires every used class to have a rule) and no responsive.css at
+        // all for a swap-only image node.
+        expect(section!.content).not.toContain('fx-rsp-');
+        expect(css).toBeUndefined();
+    });
+
+    it('re-asserts object-fit per tier when an image swap changes the fit', () => {
+        // The <picture> element swaps the src; a fit change still needs CSS so
+        // the tier's object-fit wins over the base object-<fit> class. The
+        // node therefore keeps its fx-rsp class (unlike a pure src swap).
+        const imageNode: DesignNode = {
+            ...node('photo-fit', 'Photo'),
+            type: 'image',
+            asset: { id: 'a-photo', type: 'image', src: 'https://cdn.test/photo.png', name: 'photo' },
+            objectFit: 'cover',
+            layout: {
+                ...node('photo-fit', 'Photo').layout,
+                responsive: { breakpoints: { desktop: { image: { src: 'https://cdn.test/photo-desktop.png', fit: 'contain', position: 'center top' } } } },
+            },
+        };
+        const project = generateProject(documentWith([{ name: 'desktop', minWidth: 1024 }], [imageNode]));
+        const css = findFile(project, 'src/styles/responsive.css');
+        const section = findFile(project, 'src/sections/Photo.tsx');
+
+        expect(css!.content).toContain('@media (min-width: 1024px)');
+        expect(css!.content).toContain('object-fit: contain');
+        expect(css!.content).toContain('object-position: center top');
+        expect(section!.content).toContain('fx-rsp-');
+        expect(section!.content).toContain('<source media="(min-width: 1024px)" srcSet="https://cdn.test/photo-desktop.png" />');
+    });
+
+    it('swaps a frame image fill per tier with background-image + fit', () => {
+        const frameNode: DesignNode = {
+            ...node('hero', 'Hero'),
+            style: { fills: [{ type: 'image', image: { src: 'https://cdn.test/hero.png', name: 'hero', objectFit: 'cover' } }] },
+            layout: {
+                ...node('hero', 'Hero').layout,
+                responsive: {
+                    breakpoints: {
+                        tablet: { image: { src: 'https://cdn.test/hero-tablet.png', fit: 'cover', position: 'center top' } },
+                    },
+                },
+            },
+        };
+        const project = generateProject(
+            documentWith(
+                [{ name: 'tablet', minWidth: 768 }],
+                [frameNode],
+                [
+                    { id: 'a-hero', type: 'image', src: 'https://cdn.test/hero.png', name: 'hero', fileName: 'hero', extension: 'png', data: new Uint8Array([1]) },
+                    { id: 'a-alt', type: 'image', src: 'https://cdn.test/hero-tablet.png', name: 'hero-tablet', fileName: 'hero-tablet', extension: 'png', data: new Uint8Array([2]) },
+                ],
+            ),
+        );
+        const css = findFile(project, 'src/styles/responsive.css');
+
+        expect(css!.content).toContain('@media (min-width: 768px)');
+        expect(css!.content).toContain('background-image: url("../assets/images/hero-tablet.png")');
+        expect(css!.content).toContain('background-size: cover');
+        expect(css!.content).toContain('background-position: center top');
+    });
+
+    it('clears a removed image fill at a tier with background-image: none', () => {
+        const frameNode: DesignNode = {
+            ...node('hero', 'Hero'),
+            style: { fills: [{ type: 'image', image: { src: 'https://cdn.test/hero.png', name: 'hero' } }] },
+            layout: {
+                ...node('hero', 'Hero').layout,
+                responsive: { breakpoints: { tablet: { image: { src: '' } } } },
+            },
+        };
+        const project = generateProject(documentWith([{ name: 'tablet', minWidth: 768 }], [frameNode]));
+        const css = findFile(project, 'src/styles/responsive.css');
+
+        expect(css!.content).toContain('@media (min-width: 768px)');
+        expect(css!.content).toContain('background-image: none');
     });
 
     it('does not emit responsive.css when nothing is responsive', () => {

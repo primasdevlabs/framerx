@@ -48,6 +48,17 @@ export function parseNode(node: FramerNode, sharedMasters?: Map<FramerNode, Desi
         metadata: {
             sourceId: node.id,
             sourceType: node.type,
+            // Replica identity survives into the AST for replica nodes that
+            // reached the model (unresolved overrides kept as independent
+            // nodes) so the coverage registry can track it end-to-end.
+            ...(node.source?.isReplica === true
+                ? {
+                      custom: {
+                          replicaOf: node.source.originalId ?? null,
+                          ...(node.source.breakpointName ? { breakpointName: node.source.breakpointName } : {}),
+                      },
+                  }
+                : {}),
         },
     };
 
@@ -108,7 +119,10 @@ export function parseNode(node: FramerNode, sharedMasters?: Map<FramerNode, Desi
                 metadata: node.component?.code
                     ? {
                         ...base.metadata,
-                        custom: { code: node.component.code },
+                        custom: {
+                            ...(base.metadata.custom ?? {}),
+                            code: node.component.code,
+                        },
                     }
                     : base.metadata,
                 slots: node.component?.slots
@@ -142,7 +156,10 @@ export function parseNode(node: FramerNode, sharedMasters?: Map<FramerNode, Desi
                     ? {
                         sourceId: node.id,
                         sourceType: node.type,
-                        custom: { slotProps },
+                        custom: {
+                            ...(base.metadata.custom ?? {}),
+                            slotProps,
+                        },
                     }
                     : base.metadata,
             };
@@ -239,6 +256,14 @@ export function parseResponsive(responsive?: Record<string, FramerResponsiveOver
         }
 
         if (override.visible !== undefined) parsed.visible = override.visible;
+
+        // Responsive image swap (folded from a replica): the tier's alternate
+        // image + fit/position. `src: ''` removes the image at this tier.
+        if (override.image) {
+            parsed.image = { src: override.image.src };
+            if (override.image.objectFit) parsed.image.fit = override.image.objectFit as NonNullable<ResponsiveOverride['image']>['fit'];
+            if (override.image.objectPosition) parsed.image.position = override.image.objectPosition;
+        }
         breakpoints[breakpointName] = parsed;
     }
 

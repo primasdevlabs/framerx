@@ -77,6 +77,13 @@ export const SOURCE_PROPERTIES: readonly SourceProperty[] = Object.freeze([
     { id: 'node.id', name: 'Node id', sdkAttribute: 'id', framerNodePath: 'id', designAstPath: 'id', kind: 'string', emittedAs: 'key prop / className hash' },
     { id: 'node.name', name: 'Node name', sdkAttribute: 'name', framerNodePath: 'name', designAstPath: 'name', kind: 'string', emittedAs: 'component identifier (sanitized)' },
     { id: 'node.rect', name: 'Bounding rect', sdkAttribute: 'getRect()', framerNodePath: 'frame', designAstPath: 'frame', kind: 'object', emittedAs: 'inline width/height (Tailwind/CSS)' },
+    // Replica identity (SDK `isReplica` + `originalId`): a breakpoint/variant
+    // override of a primary node, NOT a duplicate. Resolved replicas are
+    // folded into their primary's responsive behavior (and counted in the
+    // manifest's `replicas` section); replica nodes that SURVIVE the fold
+    // (unresolved — kept as independent nodes) are marked `replicaOf` in the
+    // AST, so the identity is tracked through every stage of the pipeline.
+    { id: 'source.isReplica', name: 'Replica identity (breakpoint/variant override)', sdkAttribute: 'isReplica', framerNodePath: 'source.isReplica', designAstPath: 'metadata.custom.replicaOf', kind: 'boolean', emittedAs: 'export-manifest.json `replicas` section (replica folding counts)' },
 
     // ── Layout: strategy/shape ────────────────────────────────────────
     { id: 'layout.strategy', name: 'Layout strategy (stack / grid / auto)', sdkAttribute: 'layout', framerNodePath: 'layout.strategy', designAstPath: 'layout.style.strategy', kind: 'string', emittedAs: 'flex / grid / block' },
@@ -582,6 +589,7 @@ function stableEmittedNeedles(property: SourceProperty): string[] {
         'node.id': ['className'],
         'node.name': ['className'],
         'node.rect': ['width'],
+        'source.isReplica': ['replicas'],
         'layout.strategy': ['flex'],
         'layout.stackDirection': ['flex-row'],
         'layout.stackDistribution': ['justify-center'],

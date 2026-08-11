@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import { fatFixtureDocument } from '@framer/compiler-parser';
 
-import { nodeCss } from '../src/reference/css';
+import { nodeCss, nodeCssWithOverrides } from '../src/reference/css';
 import { renderReferencePage, resolveBreakpoints, typographyCss } from '../src/reference/render';
 
 describe('renderReferencePage', () => {
@@ -120,6 +120,83 @@ describe('nodeCss / typographyCss', () => {
         expect(css).toContainEqual({ property: 'left', value: '32px' });
         expect(css).toContainEqual({ property: 'top', value: '40px' });
         expect(css).toContainEqual({ property: 'z-index', value: '10' });
+    });
+
+    it('swaps images per tier from a responsive override (<picture> / background-image)', () => {
+        // A standalone <img> swap lives in the MARKUP as <source media> (the
+        // render test below) — CSS emits no content: url() for image nodes.
+        const img = nodeCssWithOverrides(
+            {
+                id: 'i',
+                type: 'Image',
+                name: 'I',
+                frame: { x: 0, y: 0, width: 100, height: 100 },
+                layout: { strategy: 'auto', sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+                style: {},
+                image: { src: 'https://cdn.test/a.png' },
+            },
+            { image: { src: 'https://cdn.test/b.png', objectFit: 'cover' } },
+        );
+        expect(img.some((d) => d.property === 'content')).toBe(false);
+
+        // A frame with an image fill swaps the background layer; `src: ''`
+        // clears it (background-image: none) while keeping the frame box.
+        const frame = nodeCssWithOverrides(
+            {
+                id: 'f',
+                type: 'Frame',
+                name: 'F',
+                frame: { x: 0, y: 0, width: 100, height: 100 },
+                layout: { strategy: 'auto', sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+                style: { fills: [{ type: 'image', image: { src: 'https://cdn.test/a.png' } }] },
+            },
+            { image: { src: 'https://cdn.test/b.png', objectFit: 'contain', objectPosition: 'center top' } },
+        );
+        expect(frame).toContainEqual({ property: 'background-image', value: 'url("https://cdn.test/b.png")' });
+        expect(frame).toContainEqual({ property: 'background-size', value: 'contain' });
+        expect(frame).toContainEqual({ property: 'background-position', value: 'center top' });
+
+        const cleared = nodeCssWithOverrides(
+            {
+                id: 'g',
+                type: 'Frame',
+                name: 'G',
+                frame: { x: 0, y: 0, width: 100, height: 100 },
+                layout: { strategy: 'auto', sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+                style: { fills: [{ type: 'image', image: { src: 'https://cdn.test/a.png' } }] },
+            },
+            { image: { src: '' } },
+        );
+        expect(cleared).toContainEqual({ property: 'background-image', value: 'none' });
+    });
+
+    it('renders standalone image swaps as <picture><source media> with the img kept', () => {
+        const html = renderReferencePage({
+            id: 'doc_swap',
+            name: 'Swap Doc',
+            breakpoints: [{ name: 'tablet', minWidth: 768 }, { name: 'desktop', minWidth: 1024 }],
+            nodes: [
+                {
+                    id: 'photo',
+                    type: 'Image',
+                    name: 'Photo',
+                    frame: { x: 0, y: 0, width: 100, height: 100 },
+                    layout: { strategy: 'auto', sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+                    style: {},
+                    image: { src: 'https://cdn.test/a.png', alt: 'A' },
+                    responsive: {
+                        tablet: { image: { src: 'https://cdn.test/b.png' } },
+                        desktop: { image: { src: 'https://cdn.test/c.png' } },
+                    },
+                },
+            ],
+        });
+
+        expect(html).toContain('<picture>');
+        expect(html).toContain('<source media="(min-width: 768px)" srcset="https://cdn.test/b.png" />');
+        expect(html).toContain('<source media="(min-width: 1024px)" srcset="https://cdn.test/c.png" />');
+        // The <img> keeps its class + base src (object-fit stays honored).
+        expect(html).toContain('<img class="fx-ref-0" src="https://cdn.test/a.png" alt="A" />');
     });
 
     it('renders typography with exact values', () => {

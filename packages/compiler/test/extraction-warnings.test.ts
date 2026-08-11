@@ -138,6 +138,133 @@ describe('extraction root-cause warnings', () => {
         expect(extractionWarnings[0].message).toContain('no @font-face files');
     });
 
+    it('warns with count + reasons when image original bytes could not be resolved', async () => {
+        const result = await compileFramerDocument(
+            docWithExtraction({
+                masters: { status: 'ok', count: 0 },
+                codeFiles: { status: 'ok', count: 0 },
+                images: {
+                    status: 'partial',
+                    count: 4,
+                    failed: 2,
+                    reason: '1 image(s) could not read original bytes via getData (https://cdn.test/broken.png: engine rejected the read); 1 image(s) exposed no getData — exported via URL fetch (remote reference)',
+                },
+            }),
+            { projectName: 'extraction-warnings' },
+        );
+
+        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('Image original bytes could not be resolved'));
+        expect(warning).toBeDefined();
+        expect(warning!.message).toContain('partial');
+        expect(warning!.message).toContain('2 image(s) exported via URL fetch');
+        // The reason carries the exact URL + error, not a flat "failed".
+        expect(warning!.message).toContain('broken.png');
+        expect(warning!.message).toContain('engine rejected the read');
+        expect(warning!.message).toContain('exposed no getData');
+    });
+
+    it('cites the capability probe when the SDK surface never exposed ImageAsset.getData', async () => {
+        const result = await compileFramerDocument(
+            docWithExtraction({
+                masters: { status: 'ok', count: 0 },
+                codeFiles: { status: 'ok', count: 0 },
+                images: {
+                    status: 'partial',
+                    count: 0,
+                    failed: 2,
+                    reason: '2 image(s) exposed no getData (the SDK surface did not provide ImageAsset.getData on those assets) — exported via URL fetch (remote reference)',
+                },
+                capabilities: {
+                    imageGetData: {
+                        available: false,
+                        reason: 'No SDK image asset exposed ImageAsset.getData (runtime capability probe)',
+                    },
+                },
+            }),
+            { projectName: 'extraction-warnings' },
+        );
+
+        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('Image original bytes could not be resolved'));
+        expect(warning).toBeDefined();
+        // The probe names the gap: this is an SDK surface limitation, not a
+        // per-image failure.
+        expect(warning!.message).toContain('runtime capability probe found no ImageAsset.getData');
+        expect(warning!.message).toContain('URL-fetch fallback is the only path');
+    });
+
+    it('does not cite a capability gap when getData exists but threw for specific assets', async () => {
+        const result = await compileFramerDocument(
+            docWithExtraction({
+                masters: { status: 'ok', count: 0 },
+                codeFiles: { status: 'ok', count: 0 },
+                images: {
+                    status: 'partial',
+                    count: 1,
+                    failed: 1,
+                    reason: '1 image(s) could not read original bytes via getData (https://cdn.test/broken.png: engine rejected the read)',
+                },
+                // The capability exists — the failure was transient, per asset.
+                capabilities: { imageGetData: { available: true } },
+            }),
+            { projectName: 'extraction-warnings' },
+        );
+
+        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('Image original bytes could not be resolved'));
+        expect(warning).toBeDefined();
+        expect(warning!.message).toContain('engine rejected the read');
+        expect(warning!.message).not.toContain('capability probe');
+    });
+
+    it('warns when replica overrides could not be folded into their primaries', async () => {
+        const result = await compileFramerDocument(
+            docWithExtraction({
+                masters: { status: 'ok', count: 0 },
+                codeFiles: { status: 'ok', count: 0 },
+                replicas: {
+                    status: 'partial',
+                    count: 3,
+                    failed: 2,
+                    reason: "1 replica(s) had no matching primary node ('Ghost' (missing_primary)) and were kept as independent nodes; unsupported override kind(s): svg override on replica 'Hero' (r1) for breakpoint 'Tablet'",
+                },
+            }),
+            { projectName: 'extraction-warnings' },
+        );
+
+        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('Replica node(s)'));
+        expect(warning).toBeDefined();
+        expect(warning!.message).toContain('2 replica(s) emitted as independent nodes');
+        // The reason names the exact primary/breakpoint that failed.
+        expect(warning!.message).toContain('missing_primary');
+        expect(warning!.message).toContain('Tablet');
+        expect(warning!.message).toContain('unsupported override kind');
+    });
+
+    it('emits no replica warning when every replica folded into its primary', async () => {
+        const result = await compileFramerDocument(
+            docWithExtraction({
+                masters: { status: 'ok', count: 0 },
+                codeFiles: { status: 'ok', count: 0 },
+                replicas: { status: 'ok', count: 4 },
+            }),
+            { projectName: 'extraction-warnings' },
+        );
+
+        expect(result.diagnostics.validation.warnings.filter((w) => w.stage === 'extraction')).toHaveLength(0);
+    });
+
+    it('emits no extraction warning when every image resolved its original bytes', async () => {
+        const result = await compileFramerDocument(
+            docWithExtraction({
+                masters: { status: 'ok', count: 0 },
+                codeFiles: { status: 'ok', count: 0 },
+                images: { status: 'ok', count: 5 },
+            }),
+            { projectName: 'extraction-warnings' },
+        );
+
+        expect(result.diagnostics.validation.warnings.filter((w) => w.stage === 'extraction')).toHaveLength(0);
+    });
+
     it('does not duplicate the per-font no-source warnings the registry emits', async () => {
         // A partial status means some fonts bundled fine and the rest were
         // recorded with empty sources — the FontRegistry warns for each of

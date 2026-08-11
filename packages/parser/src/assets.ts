@@ -65,6 +65,21 @@ export function collectAssets(nodes: FramerNode[]): Asset[] {
             }
         }
 
+        // Responsive image overrides — an alternate image folded into the
+        // primary's per-breakpoint behavior (its bytes were resolved by the
+        // plugin before the replica was pruned). The alternate must ship as a
+        // local file too, or the tier's CSS swap would point at a file the
+        // ZIP does not contain.
+        if (node.responsive) {
+            for (const override of Object.values(node.responsive)) {
+                const img = override.image;
+                if (img?.src && !seen.has(img.src)) {
+                    seen.add(img.src);
+                    assets.push(createAsset('image', img.src, img.name, img));
+                }
+            }
+        }
+
         // Component props asset URLs and inline SVGs (avatars, prop-driven images, icons).
         if (node.props) {
             for (const [propName, val] of Object.entries(node.props)) {

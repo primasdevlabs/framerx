@@ -25,6 +25,7 @@ const MANIFEST_KEYS = [
     'components',
     'assets',
     'fonts',
+    'replicas',
     'animations',
     'coverage',
     'validation',
@@ -60,6 +61,14 @@ describe('.export-manifest.json emission', () => {
             fromMasters: expect.any(Number),
             fromCode: expect.any(Number),
             synthesized: expect.any(Number),
+        });
+        // Replica folding counts are always present (zero-filled when the
+        // source carried no replica record) so CI can rely on the shape.
+        expect(parsed.replicas).toMatchObject({
+            discovered: expect.any(Number),
+            folded: expect.any(Number),
+            unresolved: expect.any(Number),
+            unsupported: expect.any(Number),
         });
         expect(parsed.coverage).toMatchObject({
             registered: expect.any(Number),
@@ -123,5 +132,33 @@ describe('generateExportManifest helper', () => {
         expect(parsed.projectName).toBe('bare');
         expect(parsed.compilerVersion).toEqual(expect.any(String));
         expect(parsed.coverage).toBeUndefined();
+        // The replicas section is deterministic even when absent from input.
+        expect(parsed.replicas).toEqual({ discovered: 0, folded: 0, unresolved: 0, unsupported: 0 });
+    });
+
+    it('renders replica folding counts from the extraction record', async () => {
+        const result = await compileFramerDocument(
+            {
+                ...mockFramerDocument,
+                metadata: {
+                    platform: 'framer',
+                    extraction: {
+                        replicas: {
+                            status: 'partial',
+                            count: 3,
+                            failed: 1,
+                            unresolved: 1,
+                            unsupported: 0,
+                            reason: "1 replica(s) had no matching primary node ('Ghost' (missing))",
+                        },
+                    },
+                },
+            },
+            { projectName: 'manifest-replicas' },
+        );
+
+        const manifest = result.files.find((file) => file.path === EXPORT_MANIFEST_PATH)!;
+        const parsed = JSON.parse(manifest.content) as { replicas: { discovered: number; folded: number; unresolved: number; unsupported: number } };
+        expect(parsed.replicas).toEqual({ discovered: 4, folded: 3, unresolved: 1, unsupported: 0 });
     });
 });

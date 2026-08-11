@@ -89,6 +89,35 @@ describe('validateExport', () => {
         expect(result.warnings.some((w) => w.message.includes('https://cdn.example/x.png'))).toBe(true);
     });
 
+    it('warns on remote URLs inside generated CSS url() references (responsive.css)', async () => {
+        // A frame-fill image swap whose alternate has no local bytes falls back
+        // to the raw remote URL in background-image: url(...) — that must be
+        // reported exactly like a remote JSX src.
+        const files = makeFiles([
+            {
+                path: 'src/styles/responsive.css',
+                content: `@media (min-width: 768px) {\n    .fx-rsp-abc {\n        background-image: url("https://cdn.example/hero-tablet.png");\n    }\n}\n`,
+            },
+        ]);
+        const result = await validateExport(files);
+        expect(result.valid).toBe(true);
+        expect(result.warnings.some((w) => w.message.includes('https://cdn.example/hero-tablet.png'))).toBe(true);
+        expect(result.warnings.some((w) => w.stage === 'assets')).toBe(true);
+    });
+
+    it('does not warn on local CSS url() references', async () => {
+        const files = makeFiles([
+            { path: 'src/assets/images/hero-tablet.png', content: '', binary: true, data: new Uint8Array([1]) },
+            {
+                path: 'src/styles/responsive.css',
+                content: `.fx-rsp-abc { background-image: url("../assets/images/hero-tablet.png"); }\n`,
+            },
+        ]);
+        const result = await validateExport(files);
+        expect(result.valid).toBe(true);
+        expect(result.warnings.filter((w) => w.message.includes('hero-tablet.png'))).toEqual([]);
+    });
+
     it('reports statistics', async () => {
         const result = await validateExport(makeFiles());
         expect(result.statistics.files).toBeGreaterThanOrEqual(4);

@@ -51,6 +51,13 @@ export interface ExportManifestInput {
     assets?: { discovered: number; unique: number };
     /** Font counts. */
     fonts?: number;
+    /**
+     * Replica folding counts (SDK `isReplica` breakpoint/variant overrides):
+     * how many were discovered, folded into their primary's responsive
+     * behavior, kept as independent nodes (unresolved), and how many carried
+     * override kinds the responsive model cannot represent.
+     */
+    replicas?: { discovered: number; folded: number; unresolved: number; unsupported: number };
     /** Component graph counts. */
     components?: { definitions: number; instances: number; fromMasters: number; fromCode: number; synthesized: number };
     /** Validation result summary. */
@@ -74,6 +81,7 @@ export function renderExportManifest(input: ExportManifestInput): string {
         components: input.components ?? { definitions: 0, instances: 0, fromMasters: 0, fromCode: 0, synthesized: 0 },
         assets: input.assets ?? { discovered: 0, unique: 0 },
         fonts: input.fonts ?? 0,
+        replicas: input.replicas ?? { discovered: 0, folded: 0, unresolved: 0, unsupported: 0 },
         animations: { reproduced: input.coverage?.emitted ?? 0 },
         coverage: input.coverage
             ? {

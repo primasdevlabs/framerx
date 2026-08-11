@@ -16,6 +16,18 @@ import { getSdkImageUrl, isSdkComponentNode, isSdkImageNode, isSdkSlotNode, isSd
 import { parseStyle } from './style';
 import { parseText } from './typography';
 
+/** The outcome of resolving one image asset's ORIGINAL bytes. */
+export type ImageResolution =
+    | { kind: 'resolved' }
+    | { kind: 'unavailable'; url?: string }
+    | { kind: 'failed'; url?: string; error: string };
+
+/**
+ * Per-asset image resolution outcomes, keyed by the asset id (or the asset
+ * object when it carries no id) so repeated references count once.
+ */
+export type ImageResolutionMap = Map<string | SdkImageAsset, ImageResolution>;
+
 /** An instance that resolved neither a master nor a code file (will be synthesized). */
 export interface UnmatchedInstance {
     /** The instance's own node id. */
@@ -86,6 +98,24 @@ export interface ParseContext {
      * by many nodes resolves its ORIGINAL bytes exactly once per extraction.
      */
     imageDataCache?: Map<string | SdkImageAsset, { bytes: Uint8Array; mimeType: string }>;
+    /**
+     * Image byte-resolution outcomes, keyed by asset id (or object). Surfaced
+     * in `metadata.extraction.images` so the export diagnostics can report
+     * how many images got their ORIGINAL bytes via `getData()` vs. fell back
+     * to a URL fetch (`unavailable`) vs. failed outright (`failed`, with
+     * reasons) — never only a console log.
+     */
+    imageResolutions?: ImageResolutionMap;
+    /**
+     * Runtime capability probe for `ImageAsset.getData()`: whether any image
+     * asset that needed ORIGINAL bytes was encountered (the probe ran) and
+     * whether at least one of them exposed `getData` as a function. Feeds
+     * `metadata.extraction.capabilities.imageGetData` so the diagnostics can
+     * distinguish "the SDK surface cannot read original bytes" (capability
+     * gap) from "getData exists but failed for these assets" (transient).
+     */
+    imageGetDataSeen?: boolean;
+    imageGetDataAvailable?: boolean;
 }
 
 /** Map an SDK node to its Framer node type string. */
@@ -172,12 +202,36 @@ async function resolveNodeImageBytes(node: SdkNode, context: ParseContext): Prom
     }
 }
 
+/**
+ * Record an image resolution outcome once per asset (the first resolution
+ * of a given asset wins; repeated references must not inflate the counts).
+ */
+function recordImageResolution(sdkImage: SdkImageAsset, context: ParseContext, outcome: ImageResolution): void {
+    if (!context.imageResolutions) context.imageResolutions = new Map();
+    const key: string | SdkImageAsset = sdkImage.id ?? sdkImage;
+    if (!context.imageResolutions.has(key)) context.imageResolutions.set(key, outcome);
+}
+
 /** Prefer `getData()` raw bytes; keep attached data / URL fetch as fallback. */
 async function resolveSdkImageBytes(sdkImage: SdkImageAsset, context: ParseContext): Promise<void> {
     // Already-attached original bytes win over a re-fetch — never overwrite
     // the source's own bytes.
-    if (sdkImage.data && sdkImage.data.byteLength > 0) return;
-    if (typeof sdkImage.getData !== 'function') return;
+    if (sdkImage.data && sdkImage.data.byteLength > 0) {
+        recordImageResolution(sdkImage, context, { kind: 'resolved' });
+        return;
+    }
+    // Original bytes are needed — this asset is the getData capability probe.
+    context.imageGetDataSeen = true;
+    if (typeof sdkImage.getData !== 'function') {
+        // No getData on the SDK object — the exporter's URL fetch is the
+        // documented fallback. Tracked (not only logged) so the export can
+        // report how many images relied on a remote reference.
+        recordImageResolution(sdkImage, context, { kind: 'unavailable', url: sdkImage.url ?? sdkImage.src });
+        return;
+    }
+    // The SDK surface DOES expose getData — even a later throw is a
+    // transient failure, not a missing capability.
+    context.imageGetDataAvailable = true;
 
     const cache = context.imageDataCache ?? (context.imageDataCache = new Map());
     const key: string | SdkImageAsset = sdkImage.id ?? sdkImage;
@@ -185,6 +239,7 @@ async function resolveSdkImageBytes(sdkImage: SdkImageAsset, context: ParseConte
     if (cached) {
         sdkImage.data = cached.bytes;
         sdkImage.mimeType = cached.mimeType;
+        recordImageResolution(sdkImage, context, { kind: 'resolved' });
         return;
     }
     try {
@@ -193,16 +248,33 @@ async function resolveSdkImageBytes(sdkImage: SdkImageAsset, context: ParseConte
             sdkImage.data = result.bytes;
             if (result.mimeType) sdkImage.mimeType = result.mimeType;
             cache.set(key, { bytes: result.bytes, mimeType: result.mimeType });
+            recordImageResolution(sdkImage, context, { kind: 'resolved' });
+        } else {
+            recordImageResolution(sdkImage, context, { kind: 'unavailable', url: sdkImage.url ?? sdkImage.src });
         }
     } catch (error) {
         // getData failed (transient engine state, unexpected surface) — keep
         // the URL so the exporter's fetch fallback still produces a real file.
+        recordImageResolution(sdkImage, context, {
+            kind: 'failed',
+            url: sdkImage.url ?? sdkImage.src,
+            error: error instanceof Error ? error.message : String(error),
+        });
         console.warn('[framerx] image getData failed; falling back to URL fetch', error instanceof Error ? error.message : error);
     }
 }
 
-/** Convert a single SDK node (and its subtree) to a FramerNode. */
-export async function parseSdkNode(node: SdkNode, context: ParseContext = {}): Promise<FramerNode> {
+/**
+ * Convert a single SDK node (and its subtree) to a FramerNode.
+ *
+ * `breakpointName` is the enclosing breakpoint tier (a node with
+ * `isBreakpoint === true` and not the primary): its children are the replica
+ * tree for that breakpoint, so they carry `source.breakpointName`. Replica
+ * nodes (`isReplica === true`) additionally carry their `originalId` — the
+ * primary node they derive from — so the fold pass can attach their
+ * overrides to the primary instead of emitting them as duplicated content.
+ */
+export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, breakpointName?: string): Promise<FramerNode> {
     // Original image bytes first: `getData()` (raw bytes + MIME) beats a URL
     // fetch / canvas re-encode. Runs before `base` is built so parseStyle and
     // the image branch read the resolved bytes.
@@ -211,6 +283,13 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}): P
     // Slot placeholders exist only inside component masters — recognize them
     // there so the master's slot positions survive into the definition body.
     if (context.inMaster && isSdkSlotNode(node)) type = 'Slot';
+
+    // A non-primary breakpoint frame is a responsive TIER, not content: its
+    // children are the replica tree for breakpoint `node.name`.
+    const isBreakpointTier = node.isBreakpoint === true && node.isPrimaryBreakpoint !== true;
+    const childBreakpointName = isBreakpointTier ? (node.name ?? breakpointName) : breakpointName;
+    const isReplica = node.isReplica === true;
+    const originalId = node.originalId ?? null;
 
     const base: FramerNode = {
         id: node.id,
@@ -223,6 +302,17 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}): P
             platform: 'framer',
             nodeId: node.id,
             nodeType: node.nodeType,
+            // A non-primary breakpoint frame is a responsive TIER: its
+            // children are the replica tree for that breakpoint, so the fold
+            // pass prunes the frame itself and keeps only the folded
+            // overrides.
+            ...(isBreakpointTier ? { isBreakpoint: true } : {}),
+            // Replica identity: the source signal that separates a
+            // breakpoint/variant override (same entity, different tier) from
+            // a genuinely duplicated node (different source entity).
+            ...(isReplica ? { isReplica: true } : {}),
+            ...(isReplica && originalId ? { originalId } : {}),
+            ...(isReplica && childBreakpointName ? { breakpointName: childBreakpointName } : {}),
         },
     };
 
@@ -391,7 +481,7 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}): P
 
     const children = await safeChildren(node);
     if (children.length > 0) {
-        base.children = await Promise.all(children.map((child) => safeParseNode(child, context)));
+        base.children = await Promise.all(children.map((child) => safeParseNode(child, context, childBreakpointName)));
     }
 
     const imageUrl = getSdkImageUrl(node);
@@ -438,9 +528,9 @@ async function safeChildren(node: SdkNode): Promise<SdkNode[]> {
  * extraction must continue with the remaining nodes. The failure is logged so
  * the offending node is diagnosable.
  */
-export async function safeParseNode(node: SdkNode, context: ParseContext): Promise<FramerNode> {
+export async function safeParseNode(node: SdkNode, context: ParseContext, breakpointName?: string): Promise<FramerNode> {
     try {
-        return await parseSdkNode(node, context);
+        return await parseSdkNode(node, context, breakpointName);
     } catch (error) {
         console.warn('[framerx] failed to parse node', node.id, node.name, error instanceof Error ? error.message : error);
         return {

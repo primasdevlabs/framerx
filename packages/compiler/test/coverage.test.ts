@@ -109,6 +109,46 @@ describe('collectCoverage on the mock document', () => {
         }
     });
 
+    it('tracks replica identity end-to-end (source.isReplica → AST → manifest)', async () => {
+        const result = await compileFramerDocument(
+            {
+                id: 'doc_replica_cov',
+                name: 'Replica Coverage',
+                nodes: [
+                    {
+                        id: 'rep_1',
+                        type: 'Frame',
+                        name: 'Orphan Replica',
+                        frame: { x: 0, y: 0, width: 100, height: 100 },
+                        layout: { strategy: 'auto' },
+                        style: {},
+                        // An unresolved breakpoint/variant override kept as an
+                        // independent node (the fold prunes resolved ones).
+                        source: { platform: 'framer', nodeId: 'rep_1', isReplica: true, originalId: 'missing_primary', breakpointName: 'Tablet' },
+                        children: [],
+                    },
+                ],
+                metadata: {
+                    platform: 'framer',
+                    extraction: {
+                        replicas: { status: 'partial', count: 0, failed: 1, unresolved: 1, unsupported: 0, reason: "1 replica(s) had no matching primary node ('Orphan Replica' (missing_primary))" },
+                    },
+                },
+            },
+            { projectName: 'cov-replica' },
+        );
+
+        const property = result.diagnostics.coverage!.properties.find((entry) => entry.id === 'source.isReplica')!;
+        // Discovered on the source (the SDK isReplica signal survives the fold).
+        expect(property.discovered).toBe(true);
+        expect(property.discoveredCount).toBe(1);
+        // Preserved into the AST (metadata.custom.replicaOf on the kept node).
+        expect(property.preserved).toBe(true);
+        // Emitted — the manifest's `replicas` section ships the counts.
+        expect(property.emitted).toBe(true);
+        expect(property.stage).toBe('emitted');
+    });
+
     it('produces a human-readable report with stable, greppable sections', async () => {
         const result = await compileFramerDocument(mockFramerDocument, { projectName: 'cov-render' });
         const text = renderCoverageText(result.diagnostics.coverage!);

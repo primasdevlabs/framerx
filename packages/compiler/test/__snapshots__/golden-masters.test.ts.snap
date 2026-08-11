@@ -26,14 +26,20 @@ exports[`golden master-backed document > matches the golden snapshot of the gene
     "unique": 1
   },
   "fonts": 3,
+  "replicas": {
+    "discovered": 0,
+    "folded": 0,
+    "unresolved": 0,
+    "unsupported": 0
+  },
   "animations": {
-    "reproduced": 38
+    "reproduced": 40
   },
   "coverage": {
-    "registered": 65,
+    "registered": 66,
     "discovered": 21,
     "preserved": 24,
-    "emitted": 38,
+    "emitted": 40,
     "unsupported": 0,
     "lost": 0,
     "properties": [
@@ -70,7 +76,7 @@ exports[`golden master-backed document > matches the golden snapshot of the gene
       {
         "id": "asset.image",
         "sdkAttribute": "backgroundImage | image | src | url",
-        "stage": "discovered",
+        "stage": "emitted",
         "discoveredCount": 0
       },
       {
@@ -282,6 +288,12 @@ exports[`golden master-backed document > matches the golden snapshot of the gene
         "sdkAttribute": "width",
         "stage": "emitted",
         "discoveredCount": 1
+      },
+      {
+        "id": "source.isReplica",
+        "sdkAttribute": "isReplica",
+        "stage": "emitted",
+        "discoveredCount": 0
       },
       {
         "id": "style.backgroundColor",
@@ -755,6 +767,16 @@ export function CardGridSection({ className }: CardGridSectionProps) {
 img {
     max-width: 100%;
     height: auto;
+}
+
+/*
+ * Responsive image swaps render as <picture><source …/><img …/></picture>.
+ * The <picture> box is removed from layout (display: contents) so the <img>
+ * stays the flex item / positioned element — exactly as it was without the
+ * wrapper — while the <source media> elements pick the tier's image.
+ */
+picture {
+    display: contents;
 }
 ",
     "path": "src/styles/index.css",

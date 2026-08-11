@@ -36,9 +36,9 @@ import { fatFixtureDocument, parseFramerDocument } from '@framer/compiler-parser
 const EXPECTED_UNSUPPORTED: readonly string[] = Object.freeze([]);
 
 describe('fat fixture — CI gate', () => {
-    it('registers the canonical 65 properties', () => {
+    it('registers the canonical 66 properties', () => {
         // If a new property is added deliberately, update this floor.
-        expect(SOURCE_PROPERTIES.length).toBe(65);
+        expect(SOURCE_PROPERTIES.length).toBe(66);
     });
 
     it('has zero properties marked unsupported', () => {
@@ -54,8 +54,8 @@ describe('fat fixture — CI gate', () => {
 
         const report = result.diagnostics.coverage;
         expect(report).toBeDefined();
-        expect(report!.summary.registered).toBe(65);
-        expect(report!.summary.discovered).toBe(65);
+        expect(report!.summary.registered).toBe(66);
+        expect(report!.summary.discovered).toBe(66);
         expect(report!.summary.unsupported).toBe(0);
 
         const notDiscovered = report!.properties.filter((p) => p.discoveredCount === 0).map((p) => p.id);
@@ -72,7 +72,7 @@ describe('fat fixture — CI gate', () => {
             notEmitted,
             'every discovered property must reach the emitted stage end-to-end',
         ).toEqual([]);
-        expect(report.summary.emitted).toBe(65);
+        expect(report.summary.emitted).toBe(66);
     });
 
     it('exposes a deterministic stage distribution for the fat fixture', async () => {
@@ -82,9 +82,9 @@ describe('fat fixture — CI gate', () => {
         const result = await compileFramerDocument(fatFixtureDocument, { projectName: 'fat-fixture' });
         const s = result.diagnostics.coverage!.summary;
         expect(s).toMatchObject({
-            registered: 65,
-            discovered: 65,
-            emitted: 65,
+            registered: 66,
+            discovered: 66,
+            emitted: 66,
             unsupported: 0,
         });
         // Conservation-of-mass: every emitted property is also discovered, and

@@ -24,6 +24,12 @@ export interface ComponentOptions {
     /** The resolved asset paths (src URL → project path) from the asset registry. */
     assetPaths?: ReadonlyMap<string, string>;
     /**
+     * The document's breakpoints (name → min-width). Responsive image swaps
+     * emit `<source media>` per tier inside a `<picture>`, so the tier
+     * thresholds must come from the source document — never assumed.
+     */
+    breakpoints?: ReadonlyMap<string, number>;
+    /**
      * The output component name. When omitted it derives from the node name
      * (sections pass their deduplicated name; component files pass the
      * deduplicated component name so colliding names never share a file).
@@ -141,7 +147,7 @@ ${variantDecls ? `${variantDecls}
 
 export function ${componentName}(${destructuredProps}: ${componentName}Props) {
     return (
-        ${renderElement(body, componentName, className, children, hasMotion, motionProps, variantData, options.tokens, options.assetPaths)}
+        ${renderElement(body, componentName, className, children, hasMotion, motionProps, variantData, options.tokens, options.assetPaths, options.breakpoints)}
     );
 }
 `;
@@ -689,6 +695,8 @@ interface RenderOptions {
     variantData?: Map<string, VariantRenderData>;
     /** The resolved asset paths (src URL → project path) from the asset registry. */
     assetPaths?: ReadonlyMap<string, string>;
+    /** The document's breakpoints (name → min-width) for `<source media>` tiers. */
+    breakpoints?: ReadonlyMap<string, number>;
     /** Original component name → deduplicated output name. */
     componentNameMap?: ReadonlyMap<string, string>;
     /** componentId → definition (slot names + output names for instances). */
@@ -709,7 +717,7 @@ function renderNode(node: DesignNode, options: RenderOptions): string {
         case 'text':
             return renderTextNode(node, className, options.tokens, hasMotion, motionProps, options.assetPaths);
         case 'image':
-            return renderImageNode(node, className, options.tokens, hasMotion, motionProps, options.assetPaths);
+            return renderImageNode(node, className, options.tokens, hasMotion, motionProps, options.assetPaths, options.breakpoints);
         case 'vector':
             return renderVectorNode(node, className, options.tokens, hasMotion, motionProps, options.assetPaths);
         case 'component':
@@ -805,6 +813,7 @@ function renderImageNode(
     hasMotion?: boolean,
     motionProps?: MotionProps,
     assetPaths?: ReadonlyMap<string, string>,
+    breakpoints?: ReadonlyMap<string, number>,
 ): string {
     if (node.type !== 'image') return '';
     const src = imageAssetSrc(node.asset, assetPaths);
@@ -813,7 +822,46 @@ function renderImageNode(
     const tag = hasMotion ? 'motion.img' : 'img';
     const motionAttrs = hasMotion ? formatMotionAttrs(motionProps) : '';
     const styleAttrs = renderStyleAttrs(node, tokens, undefined, assetPaths);
-    return `<${tag} src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" className="${className} object-${objectFit}"${styleAttrs}${motionAttrs} />`;
+    const img = `<${tag} src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" className="${className} object-${objectFit}"${styleAttrs}${motionAttrs} />`;
+
+    // Responsive image swaps fold into the responsive model as per-breakpoint
+    // image overrides. A <picture> element with one <source media> per tier
+    // swaps the rendered image natively — unlike content: url() (which drops
+    // object-fit on the content-replaced image), the <img> keeps its
+    // `object-<fit>` class at every tier. The <picture> box is display:
+    // contents (see index.css) so the <img> stays the layout element (flex
+    // item / positioned box) exactly as before the swap existed.
+    const responsiveTiers = responsiveImageTiers(node, breakpoints);
+    if (responsiveTiers.length === 0) return img;
+
+    const sources = responsiveTiers
+        .map(({ minWidth, src: tierSrc }) => `    <source media="(min-width: ${minWidth}px)" srcSet="${escapeAttr(responsiveImageSrc(tierSrc, assetPaths))}" />`)
+        .join('\n');
+    return `<picture>\n${sources}\n${indentChildren(img)}\n</picture>`;
+}
+
+/**
+ * The tiers where a node swaps its image, ascending by min-width. Each tier
+ * resolves through the asset registry so the `<source srcSet>` references
+ * the same local file the base `<img>` uses.
+ */
+function responsiveImageTiers(node: DesignNode, breakpoints?: ReadonlyMap<string, number>): Array<{ minWidth: number; src: string }> {
+    const behavior = node.layout.responsive;
+    if (!behavior?.breakpoints) return [];
+    const tiers: Array<{ minWidth: number; src: string }> = [];
+    for (const [breakpointName, override] of Object.entries(behavior.breakpoints)) {
+        const src = override?.image?.src;
+        if (!src) continue;
+        tiers.push({ minWidth: breakpoints?.get(breakpointName) ?? 0, src });
+    }
+    return tiers.sort((a, b) => a.minWidth - b.minWidth);
+}
+
+/** Resolve an override image's source URL through the asset registry. */
+function responsiveImageSrc(src: string, assetPaths?: ReadonlyMap<string, string>): string {
+    const resolved = assetPaths?.get(src);
+    if (resolved) return toReferencePath(resolved);
+    return src;
 }
 
 /** Render a vector node as JSX. */
@@ -1066,11 +1114,12 @@ function renderElement(
     variantData?: Map<string, VariantRenderData>,
     tokens?: DesignTokens,
     assetPaths?: ReadonlyMap<string, string>,
+    breakpoints?: ReadonlyMap<string, number>,
 ): string {
     // Leaf roots (text/image/vector) must render as their own element — never
     // drop them into an empty container div.
     if (node.type === 'image' || node.type === 'text' || node.type === 'vector') {
-        return renderNode(node, { animations: hasMotion, tokens, variantData, assetPaths });
+        return renderNode(node, { animations: hasMotion, tokens, variantData, assetPaths, breakpoints });
     }
 
     const sourceTag = node.type === 'frame' && node.isSection ? 'section' : 'div';

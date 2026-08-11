@@ -5,12 +5,13 @@
  * converts it into the platform-neutral FramerDocument shape.
  */
 
-import type { FramerDocument, FramerNode } from '@framer/compiler-parser';
+import type { FramerDocument, FramerImage, FramerImageRef, FramerNode, FramerResponsiveOverride } from '@framer/compiler-parser';
 
-import type { ExtractionStatus, FramerApi, FramerCanvasRoot, FramerPage, FramerSdkFont } from './sdk';
+import { probeFontsCapability, probeImageGetDataCapability, type CapabilityProbe, type CapabilityReport } from './capabilities';
 import { fetchCodeFiles } from './code-files';
 import type { ModuleTextFetcher } from './modules';
-import { safeParseNode, type ParseContext, type UnmatchedInstance } from './node';
+import type { ExtractionStatus, FramerApi, FramerCanvasRoot, FramerPage, FramerSdkFont } from './sdk';
+import { safeParseNode, type ImageResolutionMap, type ParseContext, type UnmatchedInstance } from './node';
 import type { SdkNode } from './sdk-types';
 
 /** The font asset shape carried on `FramerDocument.fonts`. */
@@ -120,11 +121,27 @@ function fontFormatFromUrl(url: string): FramerFontAsset['sources'][number]['for
  * dropped — so the FontRegistry warns for it instead of substituting a
  * look-alike. A font whose URL could not be fetched keeps its URL (the
  * registry then warns that it remains network-dependent).
+ *
+ * The runtime capability probe (passed in) separates the two failure
+ * families: `getFonts` missing on the SDK object is an SDK capability gap
+ * (update the plugin SDK), while a present API with `url: null` fonts means
+ * those fonts genuinely have no downloadable source (custom fonts are not
+ * exposed to plugins) — never conflated, never silently dropped.
  */
-async function collectProjectFonts(api: FramerApi, fetcher: FontBytesFetcher): Promise<{ fonts: FramerFontAsset[]; status: ExtractionStatus }> {
+async function collectProjectFonts(api: FramerApi, fetcher: FontBytesFetcher, fontsProbe: CapabilityProbe): Promise<{ fonts: FramerFontAsset[]; status: ExtractionStatus }> {
     const fonts: FramerFontAsset[] = [];
     if (typeof api.getFonts !== 'function') {
-        return { fonts, status: { status: 'unavailable', reason: 'The SDK does not expose getFonts; fonts are exported as metadata only.' } };
+        // The probe (passed in) classified this as an SDK capability gap — its
+        // reason names the missing method and the consequence. Reused verbatim
+        // so the diagnostics say WHY, and never confuse this with fonts that
+        // genuinely have no downloadable source (a present API + url: null).
+        return {
+            fonts,
+            status: {
+                status: 'unavailable',
+                reason: fontsProbe.available ? 'The SDK does not expose framer.getFonts; fonts are exported as metadata only.' : fontsProbe.reason,
+            },
+        };
     }
 
     let sdkFonts: FramerSdkFont[];
@@ -172,9 +189,280 @@ async function collectProjectFonts(api: FramerApi, fetcher: FontBytesFetcher): P
                   failed: noSource.length,
                   reason: `${noSource.length} font(s) have no downloadable source file (${Array.from(new Set(noSource))
                       .slice(0, 5)
-                      .join(', ')}${noSource.length > 5 ? ', …' : ''}) — custom fonts are not available to the plugin API; the rest are bundled.`,
+                      .join(', ')}${noSource.length > 5 ? ', …' : ''}) — framer.getFonts IS available, but these fonts' url is null: custom fonts are not exposed to the plugin API. This is a property of the fonts, not a missing API; the rest are bundled.`,
               };
     return { fonts, status };
+}
+
+/**
+ * The outcome of folding replica overrides into their primaries.
+ *
+ * A replica is a breakpoint/variant override of a primary node (SDK
+ * `isReplica` + `originalId`) — NOT a duplicated node. The fold attaches the
+ * replica's overridden attributes to the primary's per-breakpoint
+ * `responsive` behavior and prunes the replica from the emitted tree.
+ */
+export interface ReplicaFoldStats {
+    /** Number of replica nodes recognized and folded into their primary. */
+    folded: number;
+    /**
+     * Replicas whose primary could not be found in the document — kept as
+     * independent nodes so nothing is silently dropped, and surfaced in the
+     * extraction record.
+     */
+    unresolved: Array<{ id: string; name: string; originalId: string | null; breakpointName?: string }>;
+    /**
+     * Override kinds the responsive model cannot represent (e.g. an image
+     * swap) — recorded so the export can say what could not fold, never
+     * silently dropped.
+     */
+    unsupported: string[];
+}
+
+/**
+ * Fold breakpoint/variant replica nodes into their primaries' responsive
+ * behavior, pruning breakpoint tier frames and resolved replicas from the
+ * emitted tree.
+ *
+ * Two passes: first index every primary node by id (non-replica, non-tier
+ * nodes, recursively), then walk the tree folding each replica's overridden
+ * attributes into `primary.responsive[breakpointName]` and dropping it.
+ * Replicas whose primary is missing (walk order, engine-internal ids) are
+ * KEPT as independent nodes and recorded — distinguishing them from the
+ * resolved overrides is exactly what `isReplica` buys.
+ */
+export function foldReplicaOverrides(nodes: FramerNode[]): { nodes: FramerNode[]; stats: ReplicaFoldStats } {
+    const stats: ReplicaFoldStats = { folded: 0, unresolved: [], unsupported: [] };
+
+    // Pass 1 — index the INPUT primaries (a replica's `originalId` targets
+    // these ids) so the walk can tell a resolvable replica from an orphan.
+    const primaries = new Map<string, FramerNode>();
+    const indexNode = (node: FramerNode): void => {
+        if (node.source?.isReplica !== true && node.source?.isBreakpoint !== true) {
+            primaries.set(node.id, node);
+        }
+        for (const child of node.children ?? []) indexNode(child);
+    };
+    for (const node of nodes) indexNode(node);
+
+    // Pass 2 — build the emitted tree: breakpoint tier frames are pruned
+    // (their children lift into the parent level), resolved replicas are
+    // pruned with their (primaryId, breakpoint) recorded for the fold, and
+    // unresolved replicas are KEPT as independent nodes — never dropped. A
+    // walk returns an ARRAY so a pruned tier can still surface its kept
+    // children at the same position.
+    const pending: Array<{ primaryId: string; replica: FramerNode; breakpointName: string }> = [];
+    const walk = (node: FramerNode): FramerNode[] => {
+        if (node.source?.isBreakpoint === true) {
+            // A tier frame is structural, not content: its children fold
+            // into their primaries; any kept (unresolved) children surface
+            // at the frame's position in the parent.
+            return (node.children ?? []).flatMap(walk);
+        }
+        if (node.source?.isReplica === true) {
+            const originalId = node.source.originalId ?? null;
+            const breakpointName = node.source.breakpointName;
+            if (originalId) {
+                const primary = primaries.get(originalId);
+                if (primary && breakpointName) {
+                    // Resolved: prune now, fold once the emitted tree exists.
+                    pending.push({ primaryId: originalId, replica: node, breakpointName });
+                    // Nested replicas inside the replica subtree fold on their
+                    // own — their originalIds target the primary tree.
+                    for (const child of node.children ?? []) walk(child);
+                    return [];
+                }
+            }
+            // No primary, or no enclosing breakpoint tier was detected — the
+            // override cannot be placed. Keep the node and walk its subtree.
+            stats.unresolved.push({
+                id: node.id,
+                name: node.name,
+                originalId,
+                ...(breakpointName ? { breakpointName } : {}),
+            });
+        }
+        return [
+            {
+                ...node,
+                children: (node.children ?? []).flatMap(walk),
+            },
+        ];
+    };
+    const emitted = nodes.flatMap(walk);
+
+    // Pass 3 — fold each pending replica into ITS emitted-tree primary (the
+    // emitted nodes are fresh copies, so folding into the input primaries
+    // would mutate objects the tree no longer references).
+    const emittedIndex = new Map<string, FramerNode>();
+    const indexEmitted = (node: FramerNode): void => {
+        emittedIndex.set(node.id, node);
+        for (const child of node.children ?? []) indexEmitted(child);
+    };
+    for (const node of emitted) indexEmitted(node);
+
+    for (const { primaryId, replica, breakpointName } of pending) {
+        const primary = emittedIndex.get(primaryId);
+        if (!primary) {
+            stats.unresolved.push({
+                id: replica.id,
+                name: replica.name,
+                originalId: primaryId,
+                ...(breakpointName ? { breakpointName } : {}),
+            });
+            continue;
+        }
+        stats.folded += 1;
+        foldReplicaIntoPrimary(primary, replica, breakpointName, stats);
+    }
+
+    return { nodes: emitted, stats };
+}
+
+/** Fold one replica's overridden attributes into its primary's responsive behavior. */
+function foldReplicaIntoPrimary(primary: FramerNode, replica: FramerNode, breakpointName: string, stats: ReplicaFoldStats): void {
+    const { override, unsupported } = buildResponsiveOverride(primary, replica);
+    for (const reason of unsupported) stats.unsupported.push(reason);
+    if (Object.keys(override).length === 0) return; // pure duplicate — inherits everything
+
+    primary.responsive = {
+        ...primary.responsive,
+        [breakpointName]: mergeResponsiveOverride(primary.responsive?.[breakpointName], override),
+    };
+}
+
+/**
+ * Diff a replica's parsed attributes against its primary's — the overridden
+ * values are the per-breakpoint override. Inherited (equal) values produce
+ * nothing, so a replica that changed nothing folds to an empty override.
+ */
+function buildResponsiveOverride(primary: FramerNode, replica: FramerNode): { override: FramerResponsiveOverride; unsupported: string[] } {
+    const override: FramerResponsiveOverride = {};
+    const unsupported: string[] = [];
+    const p = primary.layout ?? {};
+    const r = replica.layout ?? {};
+
+    // Layout (flex fields the responsive model can override).
+    const layout: NonNullable<FramerResponsiveOverride['layout']> = {};
+    if (r.direction && r.direction !== p.direction) layout.direction = r.direction;
+    if (r.alignItems && r.alignItems !== p.alignItems) layout.alignItems = r.alignItems;
+    if (r.justifyContent && r.justifyContent !== p.justifyContent) layout.justifyContent = r.justifyContent;
+    if (r.flexWrap && r.flexWrap !== p.flexWrap) layout.flexWrap = r.flexWrap;
+    if (r.gap !== undefined && r.gap !== p.gap) layout.gap = r.gap;
+    if (Object.keys(layout).length > 0) override.layout = layout;
+
+    // Sizing — explicit px width/height come from the frame rect (the layout
+    // parser keeps only the mode); the rest compare sizing fields.
+    const ps = p.sizing ?? {};
+    const rs = r.sizing ?? {};
+    const sizing: NonNullable<FramerResponsiveOverride['sizing']> = {};
+    const primaryW = primary.frame?.width;
+    const replicaW = replica.frame?.width;
+    const primaryH = primary.frame?.height;
+    const replicaH = replica.frame?.height;
+    if (primaryW !== undefined && replicaW !== undefined && replicaW !== primaryW) sizing.width = replicaW;
+    if (primaryH !== undefined && replicaH !== undefined && replicaH !== primaryH) sizing.height = replicaH;
+    if (rs.widthMode && rs.widthMode !== ps.widthMode) sizing.widthMode = rs.widthMode;
+    if (rs.heightMode && rs.heightMode !== ps.heightMode) sizing.heightMode = rs.heightMode;
+    if (rs.minWidth !== undefined && rs.minWidth !== ps.minWidth) sizing.minWidth = rs.minWidth;
+    if (rs.maxWidth !== undefined && rs.maxWidth !== ps.maxWidth) sizing.maxWidth = rs.maxWidth;
+    if (rs.minHeight !== undefined && rs.minHeight !== ps.minHeight) sizing.minHeight = rs.minHeight;
+    if (rs.maxHeight !== undefined && rs.maxHeight !== ps.maxHeight) sizing.maxHeight = rs.maxHeight;
+    if (rs.aspectRatio !== undefined && rs.aspectRatio !== ps.aspectRatio) sizing.aspectRatio = rs.aspectRatio;
+    if (Object.keys(sizing).length > 0) override.sizing = sizing;
+
+    // Spacing (padding). The model carries a complete inset, so when any side
+    // differs the replica's full padding is the override — unchanged sides
+    // re-emit the primary's own values, which is redundant but exact.
+    const rp = r.padding;
+    if (rp) {
+        const pp = p.padding;
+        const changed = pp
+            ? rp.top !== pp.top || rp.right !== pp.right || rp.bottom !== pp.bottom || rp.left !== pp.left
+            : true;
+        if (changed) override.spacing = { padding: rp };
+    }
+
+    // Typography (fontSize / color) + visual opacity.
+    const style: NonNullable<FramerResponsiveOverride['style']> = {};
+    const pt = primary.text?.style;
+    const rt = replica.text?.style;
+    if (rt?.fontSize !== undefined && rt.fontSize !== pt?.fontSize) style.fontSize = rt.fontSize;
+    if (rt?.color !== undefined && rt.color !== pt?.color) style.color = rt.color;
+    const po = primary.style?.opacity;
+    const ro = replica.style?.opacity;
+    if (ro !== undefined && ro !== po) style.opacity = ro;
+    if (Object.keys(style).length > 0) override.style = style;
+
+    // Visibility.
+    const pv = primary.style?.visible;
+    const rv = replica.style?.visible;
+    if (rv !== undefined && rv !== pv) override.visible = rv;
+
+    // Image swaps/removals — the replica overrides the image at this tier.
+    // The responsive model now carries a per-breakpoint image (src + the
+    // already-resolved bytes + fit), so a swap folds instead of being
+    // recorded as unsupported. The alternate src ships as a local file
+    // (collected from the override by collectAssets) and the generators
+    // swap the rendered image per tier.
+    const primaryImage = nodeImageRef(primary);
+    const replicaImage = nodeImageRef(replica);
+    if (replicaImage && replicaImage.src !== primaryImage?.src) {
+        // A real swap: carry the replica's full image ref so the bytes the
+        // plugin resolved (getData / fetch) survive the prune. Both node
+        // shapes (FramerImage / FramerImageRef) carry the same rendered ref.
+        override.image = replicaImage as FramerImageRef;
+    } else if (!replicaImage && primaryImage) {
+        // The image was REMOVED at this tier: a standalone image node is
+        // gone entirely (hide it — no box), a frame keeps its box but loses
+        // the background fill (`src: ''` → background-image: none).
+        if (primary.type === 'Image') {
+            override.visible = false;
+        } else {
+            override.image = {
+                src: '',
+                objectFit: primaryImage.objectFit as FramerImageRef['objectFit'],
+                objectPosition: primaryImage.objectPosition,
+            };
+        }
+    }
+    if (replica.vector?.svg && replica.vector.svg !== primary.vector?.svg) {
+        unsupported.push(`svg override on replica '${replica.name}' (${replica.id})`);
+    }
+
+    return { override, unsupported };
+}
+
+/**
+ * The image reference a node renders: a standalone image node's `image`, else
+ * its first image fill (a frame whose background is an image).
+ */
+function nodeImageRef(node: FramerNode): FramerImage | FramerImageRef | undefined {
+    if (node.image?.src) return node.image;
+    const fill = (node.style?.fills ?? []).find((f) => f.type === 'image' && f.image?.src);
+    return fill?.image;
+}
+
+/** Merge a new override into an existing one for the same (primary, breakpoint). */
+function mergeResponsiveOverride(existing: FramerResponsiveOverride | undefined, incoming: FramerResponsiveOverride): FramerResponsiveOverride {
+    return {
+        ...(existing?.layout || incoming.layout ? { layout: { ...existing?.layout, ...incoming.layout } } : {}),
+        ...(existing?.sizing || incoming.sizing ? { sizing: { ...existing?.sizing, ...incoming.sizing } } : {}),
+        ...(existing?.spacing || incoming.spacing
+            ? {
+                  spacing: {
+                      padding: incoming.spacing?.padding ?? existing?.spacing?.padding,
+                  },
+              }
+            : {}),
+        ...(existing?.style || incoming.style ? { style: { ...existing?.style, ...incoming.style } } : {}),
+        ...(incoming.visible !== undefined ? { visible: incoming.visible } : {}),
+        // Image override: last fold for the tier wins (one replica per tier).
+        ...(() => {
+            const image = incoming.image ?? existing?.image;
+            return image ? { image } : {};
+        })(),
+    };
 }
 
 /** Extract the full Framer document from the SDK. */
@@ -209,8 +497,11 @@ export async function extractFramerDocument(
     // Project-wide fonts come from getFonts() (one entry per weight/style,
     // each with a downloadable file URL); the bytes are fetched so the export
     // is self-contained. Custom fonts are not exposed to plugins — recorded,
-    // never silently dropped.
-    const fontFetch = await collectProjectFonts(api, options.fontFetcher ?? defaultFontBytesFetcher);
+    // never silently dropped. The runtime capability probe runs first so the
+    // "API missing" (SDK surface gap) and "font has no downloadable source"
+    // (custom font) cases are never conflated in the diagnostics.
+    const fontsProbe = probeFontsCapability(api);
+    const fontFetch = await collectProjectFonts(api, options.fontFetcher ?? defaultFontBytesFetcher, fontsProbe);
 
     // Component masters give every instance its real definition body (slot
     // positions + per-slot props) instead of a synthesized approximation.
@@ -234,7 +525,7 @@ export async function extractFramerDocument(
         moduleFailures: [],
     };
 
-    const nodes: FramerNode[] = [];
+    const walkedNodes: FramerNode[] = [];
     for (const page of pages) {
         // A page the SDK cannot walk must not abort the whole extraction —
         // the remaining pages still load.
@@ -245,9 +536,17 @@ export async function extractFramerDocument(
             children = [];
         }
         for (const child of children) {
-            nodes.push(await safeParseNode(child, context));
+            walkedNodes.push(await safeParseNode(child, context));
         }
     }
+
+    // Responsive replicas (SDK `isReplica`) are breakpoint/variant OVERRIDES
+    // of a primary node, not duplicated content: fold each replica's
+    // overridden attributes into the primary's per-breakpoint responsive
+    // behavior and prune the replica from the emitted tree. Breakpoint tier
+    // frames (structural) are pruned too. The stats surface how many folded
+    // and which could not (no primary / no tier / unsupported override kind).
+    const { nodes, stats: replicaStats } = foldReplicaOverrides(walkedNodes);
 
     // NOTE: metadata deliberately carries no export timestamp — the exporter
     // must be deterministic: the same document must produce the same output
@@ -264,6 +563,26 @@ export async function extractFramerDocument(
     // to real implementations vs. failed to fetch (each counted once per
     // unique URL). Omitted when the document carries no module instances.
     const moduleStats = moduleExtractionStatus(context);
+    // Image byte-resolution outcome: how many images got their ORIGINAL bytes
+    // via `getData()` vs. fell back to a URL fetch (`unavailable`) vs. failed
+    // outright (`failed`, with reasons). Omitted when the document carries no
+    // SDK image assets.
+    const imageStats = imageExtractionStatus(context);
+    // Runtime capability report: whether the SDK surface exposes the APIs the
+    // export depends on (framer.getFonts, ImageAsset.getData) — the probe that
+    // tells "SDK capability gap" apart from "entity genuinely has no
+    // downloadable source" (a font whose url is null). The image probe is
+    // omitted when the document carried no image assets.
+    const imageProbe = probeImageGetDataCapability(context);
+    const capabilityReport: CapabilityReport = {
+        getFonts: fontsProbe,
+        ...(imageProbe ? { imageGetData: imageProbe } : {}),
+    };
+    // Replica folding outcome: how many breakpoint/variant overrides were
+    // recognized and folded into their primary (ok), vs. how many could not
+    // be placed (partial — kept as independent nodes / unsupported kinds).
+    // Omitted when the document carries no replicas.
+    const replicaStatus = replicaExtractionStatus(replicaStats);
     const document: FramerDocument = {
         id: root.id,
         name: root.name ?? 'Framer Document',
@@ -280,6 +599,9 @@ export async function extractFramerDocument(
                 masters: masters.status,
                 codeFiles: codeFiles.status,
                 fonts: fontFetch.status,
+                capabilities: capabilityReport,
+                ...(imageStats ? { images: imageStats } : {}),
+                ...(replicaStatus ? { replicas: replicaStatus } : {}),
                 ...(moduleStats ? { modules: moduleStats } : {}),
                 ...(unmatched.length > 0 ? { unmatchedInstances: unmatched as UnmatchedInstance[] } : {}),
             },
@@ -293,6 +615,94 @@ export async function extractFramerDocument(
     }
 
     return document;
+}
+
+/**
+ * The outcome of image byte resolution for one extraction.
+ *
+ * `ok` when every SDK image asset resolved its ORIGINAL bytes (via `getData()`
+ * or pre-attached data), `partial` when some fell back to a URL fetch
+ * (`unavailable` — no `getData` on the object, the documented fallback) or
+ * failed outright (`failed` — `getData()` threw; the reason names the exact
+ * URLs and errors). Undefined when the document carried no SDK image assets.
+ */
+function imageExtractionStatus(context: ParseContext): ExtractionStatus | undefined {
+    const resolutions: ImageResolutionMap | undefined = context.imageResolutions;
+    if (!resolutions || resolutions.size === 0) return undefined;
+
+    let resolved = 0;
+    const unavailable: string[] = [];
+    const failed: Array<{ url?: string; error: string }> = [];
+    for (const outcome of resolutions.values()) {
+        if (outcome.kind === 'resolved') {
+            resolved += 1;
+        } else if (outcome.kind === 'unavailable') {
+            unavailable.push(outcome.url ?? '(no URL)');
+        } else {
+            failed.push({ url: outcome.url, error: outcome.error });
+        }
+    }
+
+    if (failed.length === 0 && unavailable.length === 0) {
+        return { status: 'ok', count: resolved };
+    }
+
+    const reasonParts: string[] = [];
+    if (failed.length > 0) {
+        const sample = failed
+            .slice(0, 3)
+            .map((f) => `${f.url ?? '(no URL)'}: ${f.error}`)
+            .join('; ');
+        reasonParts.push(`${failed.length} image(s) could not read original bytes via getData (${sample}${failed.length > 3 ? '; …' : ''})`);
+    }
+    if (unavailable.length > 0) {
+        reasonParts.push(`${unavailable.length} image(s) exposed no getData (the SDK surface did not provide ImageAsset.getData on those assets) — exported via URL fetch (remote reference)`);
+    }
+    return {
+        status: 'partial',
+        count: resolved,
+        failed: failed.length + unavailable.length,
+        reason: reasonParts.join('; '),
+    };
+}
+
+/**
+ * The outcome of replica folding for one extraction.
+ *
+ * `ok` when every replica was recognized and folded into its primary's
+ * responsive behavior, `partial` when some could not be placed (no matching
+ * primary / no enclosing breakpoint tier / an override kind the responsive
+ * model cannot represent), and undefined when the document carried no
+ * replicas at all — nothing to report.
+ */
+function replicaExtractionStatus(stats: ReplicaFoldStats): ExtractionStatus | undefined {
+    if (stats.folded === 0 && stats.unresolved.length === 0 && stats.unsupported.length === 0) return undefined;
+    if (stats.unresolved.length === 0 && stats.unsupported.length === 0) {
+        return { status: 'ok', count: stats.folded };
+    }
+
+    const reasonParts: string[] = [];
+    if (stats.unresolved.length > 0) {
+        const sample = stats.unresolved
+            .slice(0, 3)
+            .map((u) => `'${u.name}' (${u.originalId ?? 'no originalId'})`)
+            .join('; ');
+        reasonParts.push(`${stats.unresolved.length} replica(s) had no matching primary node (${sample}${stats.unresolved.length > 3 ? '; …' : ''}) and were kept as independent nodes`);
+    }
+    if (stats.unsupported.length > 0) {
+        const sample = stats.unsupported.slice(0, 3).join('; ');
+        reasonParts.push(`unsupported override kind(s): ${sample}${stats.unsupported.length > 3 ? '; …' : ''}`);
+    }
+    return {
+        status: 'partial',
+        count: stats.folded,
+        failed: stats.unresolved.length + stats.unsupported.length,
+        reason: reasonParts.join('; '),
+        // Exact counts for the export manifest (the manifest's `replicas`
+        // section reports discovered / folded / unresolved / unsupported).
+        unresolved: stats.unresolved.length,
+        unsupported: stats.unsupported.length,
+    };
 }
 
 /**

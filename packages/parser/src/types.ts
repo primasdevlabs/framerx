@@ -423,6 +423,14 @@ export interface FramerResponsiveOverride {
         opacity?: number;
     };
     visible?: boolean;
+    /**
+     * The alternate image for this breakpoint — a responsive image swap on a
+     * replica, folded into the primary's behavior. Carries the replica's
+     * full image ref (src + already-resolved bytes + fit) so the asset
+     * collector can ship the alternate as a local file and the generators
+     * can swap the rendered image per tier. `src: ''` removes the image.
+     */
+    image?: FramerImageRef;
 }
 
 /** The source metadata of a Framer node. */
@@ -435,6 +443,25 @@ export interface FramerSource {
     nodeId?: string;
     /** The source node type. */
     nodeType?: string;
+    /**
+     * Whether the node is a non-primary breakpoint tier frame (SDK
+     * `isBreakpoint` on FrameNode). Its children are the replica tree for
+     * that breakpoint; the frame itself is structural, never content.
+     */
+    isBreakpoint?: boolean;
+    /**
+     * Whether the node is a replica — a breakpoint/variant override of a
+     * primary node (SDK `isReplica`). Replicas inherit from the primary until
+     * an attribute is overridden, so they are "override, not a duplicate".
+     */
+    isReplica?: boolean;
+    /** The id of the primary node this replica derives from (SDK `originalId`). */
+    originalId?: string | null;
+    /**
+     * The source breakpoint name whose replica tree this node belongs to
+     * (the enclosing breakpoint tier frame's name).
+     */
+    breakpointName?: string;
 }
 
 /** The root Framer document. */

@@ -169,6 +169,28 @@ export interface SdkNode {
     link?: string | null;
     linkOpenInNewTab?: boolean | null;
 
+    /**
+     * Whether the node is a replica — a breakpoint/variant override of a
+     * primary node (`isReplica` on every SDK node). Replicas inherit from
+     * the primary until an attribute is overridden on them, so they are the
+     * source signal for "override, not a duplicate" in responsive layout
+     * compilation.
+     */
+    isReplica?: boolean;
+    /**
+     * The id of the primary node this replica derives from (`originalId` on
+     * every SDK node; null when the node is not a replica).
+     */
+    originalId?: string | null;
+    /**
+     * Whether the node is a breakpoint tier frame (`isBreakpoint` on
+     * FrameNode): a non-primary breakpoint's children are the replica tree
+     * for that breakpoint.
+     */
+    isBreakpoint?: boolean;
+    /** Whether the breakpoint frame is the primary breakpoint. */
+    isPrimaryBreakpoint?: boolean;
+
     svg?: string;
     /** Downloaded SVG bytes when the source API exposes them separately. */
     svgData?: Uint8Array;

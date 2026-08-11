@@ -71,7 +71,16 @@ export type ExtractionStatus =
     | { status: 'denied'; reason: string }
     | { status: 'error'; reason: string }
     | { status: 'empty'; reason: string }
-    | { status: 'partial'; count: number; failed: number; reason: string };
+    | {
+          status: 'partial';
+          count: number;
+          failed: number;
+          reason: string;
+          /** Replicas kept as independent nodes (no matching primary / tier). */
+          unresolved?: number;
+          /** Replica override kinds the responsive model cannot represent (e.g. SVG swaps). */
+          unsupported?: number;
+      };
 
 /**
  * A font listed by `framer.getFonts()`.

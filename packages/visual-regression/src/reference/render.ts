@@ -32,6 +32,9 @@ const RESET_CSS = `
 html, body { margin: 0; padding: 0; }
 body { font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 img, svg, video { max-width: 100%; height: auto; display: block; }
+/* Responsive image swaps render as <picture>; the wrapper must not become
+   a layout box (the <img> is the flex item / positioned element). */
+picture { display: contents; }
 h1, h2, h3, h4, h5, h6, p { margin: 0; }
 `;
 
@@ -158,7 +161,7 @@ function renderNode(
         case 'Text':
             return renderText(node, className);
         case 'Image':
-            return renderImage(node, className);
+            return renderImage(node, className, breakpoints);
         case 'Vector':
             return renderVector(node, className);
         case 'Component':
@@ -199,11 +202,30 @@ function renderText(node: FramerNode, className: string): string {
 }
 
 /** An image node. */
-function renderImage(node: FramerNode, className: string): string {
+function renderImage(node: FramerNode, className: string, breakpoints: ResolvedBreakpoint[]): string {
     const image = node.image;
     const src = image?.src ?? '';
     const alt = image?.alt ?? '';
-    return `<img class="${className}" src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" />`;
+    const img = `<img class="${className}" src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" />`;
+
+    // Responsive image swaps: one <source media> per tier that carries an
+    // alternate image — mirroring the generated project's <picture> element
+    // (object-fit stays honored because the <img> keeps its box and class).
+    const tiers = node.responsive
+        ? Object.entries(node.responsive)
+              .filter(([, override]) => override?.image?.src)
+              .map(([breakpointName, override]) => ({
+                  minWidth: breakpoints.find((b) => b.name === breakpointName)?.minWidth ?? 0,
+                  src: override!.image!.src,
+              }))
+              .sort((a, b) => a.minWidth - b.minWidth)
+        : [];
+    if (tiers.length === 0) return img;
+
+    const sources = tiers
+        .map(({ minWidth, src: tierSrc }) => `    <source media="(min-width: ${minWidth}px)" srcset="${escapeAttr(tierSrc)}" />`)
+        .join('\n');
+    return `<picture>\n${sources}\n${indent(img)}\n</picture>`;
 }
 
 /** A vector node: inline SVG from the source, or a neutral box. */

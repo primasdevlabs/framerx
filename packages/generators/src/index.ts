@@ -196,7 +196,12 @@ export function generateProject(document: DesignDocument, options: GeneratorOpti
 
     // Responsive styles: emitted only when the document actually defines
     // responsive behavior (media queries at the document's own breakpoints).
-    const responsiveCss = generateResponsiveCss(document);
+    const responsiveCss = generateResponsiveCss(document, assetPaths);
+
+    // The document's breakpoint thresholds (name → min-width), threaded into
+    // the section/component generators so responsive image swaps emit
+    // `<source media>` per tier at the document's own widths.
+    const breakpoints = new Map(document.breakpoints.map((bp) => [bp.name, bp.minWidth]));
     const hasResponsive = responsiveCss.content.includes('@media');
     if (hasResponsive) files.push(responsiveCss);
 
@@ -220,6 +225,7 @@ export function generateProject(document: DesignDocument, options: GeneratorOpti
             animations: options.animations,
             tokens,
             assetPaths,
+            breakpoints,
             componentNameMap,
             componentById,
             codeImports,
@@ -255,6 +261,7 @@ export function generateProject(document: DesignDocument, options: GeneratorOpti
             animations: options.animations,
             tokens,
             assetPaths,
+            breakpoints,
             componentNameMap,
             componentById,
             codeImports,

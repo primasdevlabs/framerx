@@ -168,7 +168,7 @@ describe('coverage classification on the unsupported-properties fixture', () => 
     });
 });
 
-describe('registry: 65 registered properties, all marked active', () => {
+describe('registry: 66 registered properties, all marked active', () => {
     it('contains the four formerly-unsupported properties as active (not `unsupported`)', () => {
         const gridColumnWidth = SOURCE_PROPERTIES.find((p) => p.id === 'layout.gridColumnWidth');
         const cursor = SOURCE_PROPERTIES.find((p) => p.id === 'style.cursor');
@@ -191,8 +191,8 @@ describe('registry: 65 registered properties, all marked active', () => {
         expect(imageRendering?.designAstPath).toBe('style.imageRendering');
     });
 
-    it('contains exactly 65 registered properties', () => {
-        expect(SOURCE_PROPERTIES.length).toBe(65);
+    it('contains exactly 66 registered properties', () => {
+        expect(SOURCE_PROPERTIES.length).toBe(66);
     });
 
     it('no property in the registry carries `unsupported: true`', () => {
