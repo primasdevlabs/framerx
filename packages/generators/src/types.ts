@@ -18,6 +18,18 @@ export interface VirtualFile {
     data?: Uint8Array;
 }
 
+/** A semantic warning raised during generation (e.g. content with no slot). */
+export interface GenerationWarning {
+    /** The pipeline stage that produced the issue. */
+    stage: string;
+    /** The project file path (when applicable). */
+    path?: string;
+    /** The source node id (when applicable). */
+    nodeId?: string;
+    /** A human-readable description. */
+    message: string;
+}
+
 /** The generated project — a virtual file tree. */
 export interface GeneratedProject {
     /** The name of the project. */
@@ -26,6 +38,8 @@ export interface GeneratedProject {
     files: VirtualFile[];
     /** The root nodes that were generated. */
     nodes: DesignNode[];
+    /** Semantic warnings (slot drops, unsupported placements…). */
+    warnings?: GenerationWarning[];
 }
 
 /** The component mapping for a generated node. */

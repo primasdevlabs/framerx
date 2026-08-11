@@ -2,14 +2,12 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "noEmit": true,
-    "allowImportingTsExtensions": true
+    "moduleDetection": "force"
   },
   "references": [
     {
@@ -19,6 +17,6 @@
       "path": "../parser"
     }
   ],
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "vite.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

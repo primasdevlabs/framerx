@@ -7,12 +7,22 @@ import { sanitizeComponentName } from '@framer/compiler-shared';
 
 import type { DesignTokens } from '../tailwind/tokens';
 
-import { generateComponent } from './component';
+import { generateComponent, type ComponentOptions } from './component';
+
+/** The options for generating a section component. */
+export interface SectionOptions extends ComponentOptions {
+    /** The deduplicated output name (defaults to the sanitized node name). */
+    sectionName?: string;
+}
 
 /** Generate a React section component for a node. */
-export function generateSection(node: DesignNode, options: { animations?: boolean; tokens?: DesignTokens } = {}): ReturnType<typeof generateComponent> {
-    const sectionName = sanitizeComponentName(node.name);
-    const component = generateComponent(node, { ...options, importPrefix: '../components/' });
+export function generateSection(node: DesignNode, options: SectionOptions = {}): ReturnType<typeof generateComponent> {
+    const sectionName = options.sectionName ?? sanitizeComponentName(node.name);
+    const component = generateComponent(node, {
+        ...options,
+        componentName: sectionName,
+        importPrefix: '../components/',
+    });
 
     return {
         ...component,

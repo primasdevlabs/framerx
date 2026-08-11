@@ -1,5 +1,5 @@
 {
-    "id": "framerx-compiler",
+    "id": "frmrxc",
     "name": "FramerX Compiler",
     "description": "Export production-ready React + TypeScript projects from your Framer design with one click.",
     "modes": ["canvas"],

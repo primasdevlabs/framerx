@@ -67,11 +67,32 @@ export interface RadialGradient {
     stops: GradientStop[];
 }
 
+/** A reference to an image used as a fill. */
+export interface ImageFillRef {
+    /** The source URL or data URI. */
+    src: string;
+    /** The original name of the image. */
+    name?: string;
+    /** The width in px. */
+    width?: number;
+    /** The height in px. */
+    height?: number;
+    /** The MIME type. */
+    mimeType?: string;
+    /** The pre-fetched binary data (populated by the exporter). */
+    data?: Uint8Array;
+    /** CSS object-fit for this fill. */
+    objectFit?: 'fill' | 'contain' | 'cover' | 'none' | 'scale-down';
+    /** CSS object-position for this fill. */
+    objectPosition?: string;
+}
+
 /** A fill definition. */
 export type Fill =
     | { type: 'solid'; color: ColorValue }
     | LinearGradient
-    | RadialGradient;
+    | RadialGradient
+    | { type: 'image'; image: ImageFillRef };
 
 /** A stroke definition. */
 export interface Stroke {

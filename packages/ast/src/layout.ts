@@ -39,6 +39,10 @@ export interface GridLayout {
     strategy: 'grid';
     columns: number | string[];
     rows: number | string[];
+    /** Per-column width in px (when columns is auto-fill / unspecified). */
+    columnWidth?: number;
+    /** Per-row height in px (when rows is auto / unspecified). */
+    rowHeight?: number;
     columnGap: number;
     rowGap: number;
     alignItems: GridAlign;
@@ -74,6 +78,9 @@ export type SizingMode = 'fixed' | 'fill' | 'auto' | 'hug';
 export interface Sizing {
     widthMode: SizingMode;
     heightMode: SizingMode;
+    /** The explicit size in px (used by responsive fixed overrides). */
+    width?: number;
+    height?: number;
     minWidth?: number;
     maxWidth?: number;
     minHeight?: number;
@@ -110,6 +117,12 @@ export interface ResponsiveOverride {
     layout?: Partial<LayoutStyle>;
     sizing?: Partial<Sizing>;
     spacing?: Partial<Spacing>;
+    /** Typography/visual overrides (text nodes and styled containers). */
+    style?: {
+        fontSize?: number;
+        color?: string;
+        opacity?: number;
+    };
     visible?: boolean;
 }
 

@@ -5,6 +5,7 @@
 import type { Breakpoint, DesignToken } from '@framer/compiler-shared';
 
 import type { Asset, FontAsset } from './asset';
+import type { ComponentDefinition } from './component';
 import type { DesignNode } from './nodes';
 
 /** The design document — the single source of truth for the compiler. */
@@ -23,6 +24,14 @@ export interface DesignDocument {
     tokens?: DesignTokens;
     /** The breakpoints defined for the document. */
     breakpoints: Breakpoint[];
+    /**
+     * The reusable component definitions (one implementation per definition).
+     *
+     * Populated by the separation pass; when absent, generation derives
+     * definitions deterministically from the document's instances, so the
+     * model is a single source of truth either way.
+     */
+    components?: ComponentDefinition[];
     /** The metadata of the document. */
     metadata?: DocumentMetadata;
 }

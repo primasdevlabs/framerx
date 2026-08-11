@@ -14,6 +14,7 @@
 import type { DesignDocument, DesignNode } from '@framer/compiler-ast';
 
 import { extractComponents, type ExtractOptions } from './extractor';
+import { separateComponents } from './separator';
 
 /** The options for the optimization stage. */
 export interface OptimizeOptions {
@@ -22,6 +23,11 @@ export interface OptimizeOptions {
      * Defaults to true. Pass an object to tune the extraction thresholds.
      */
     extractComponents?: boolean | ExtractOptions;
+    /**
+     * Whether to separate component definitions from instances (one
+     * implementation file per definition). Defaults to true.
+     */
+    separateComponents?: boolean;
 }
 
 /** Optimize a design document. Returns a new document; the input is untouched. */
@@ -33,6 +39,10 @@ export function optimizeDocument(document: DesignDocument, options: OptimizeOpti
 
     if (options.extractComponents !== false) {
         result = extractComponents(result, typeof options.extractComponents === 'object' ? options.extractComponents : undefined);
+    }
+
+    if (options.separateComponents !== false) {
+        result = separateComponents(result);
     }
 
     return result;
@@ -66,6 +76,7 @@ function isRedundantWrapper(node: DesignNode): boolean {
 
     const hasAnimations = node.animations !== undefined && node.animations.animations.length > 0;
     const hasPosition = node.layout.position.mode !== 'static';
+    const hasResponsive = node.layout.responsive !== undefined;
     const isSpecial = node.type === 'frame' && (node.isSection === true || node.isScrollContainer === true);
 
     // A fixed/fill-sized empty container still occupies layout space (flex/grid
@@ -75,5 +86,5 @@ function isRedundantWrapper(node: DesignNode): boolean {
         (sizing.widthMode === 'auto' || sizing.widthMode === 'hug') &&
         (sizing.heightMode === 'auto' || sizing.heightMode === 'hug');
 
-    return rendersNothing && !hasVisualStyle && !hasAnimations && !hasPosition && !isSpecial;
+    return rendersNothing && !hasVisualStyle && !hasAnimations && !hasPosition && !hasResponsive && !isSpecial;
 }

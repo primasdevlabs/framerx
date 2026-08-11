@@ -18,6 +18,8 @@
     "outDir": "dist",
     "rootDir": "."
   },
+  "include": ["packages/*/src/**/*"],
+  "exclude": ["node_modules", "dist", "demo-output", "**/demo-output/**", "**/.turbo/**", ".freebuff", "packages/*/test/**", "packages/*/node_modules/**"],
   "references": [
     {
       "path": "./packages/ast"
@@ -42,6 +44,9 @@
     },
     {
       "path": "./packages/plugin"
+    },
+    {
+      "path": "./packages/visual-regression"
     }
   ]
 }

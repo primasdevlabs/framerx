@@ -36,6 +36,11 @@ export interface FramerNode {
     variants?: FramerVariant[];
     /** The props of the node (for component nodes). */
     props?: Record<string, unknown>;
+    /**
+     * Per-breakpoint overrides (breakpoint name → override). Breakpoint
+     * definitions live on the document (`FramerDocument.breakpoints`).
+     */
+    responsive?: Record<string, FramerResponsiveOverride>;
     /** The source metadata of the node. */
     source?: FramerSource;
 }
@@ -68,6 +73,8 @@ export interface FramerStyle {
     overflow?: string;
     /** Cursor style. */
     cursor?: string;
+    /** Image rendering hint (e.g. 'crisp-edges', 'pixelated'). */
+    imageRendering?: string;
     /** CSS transform. */
     transform?: FramerTransform;
     /** CSS filters. */
@@ -161,6 +168,10 @@ export interface FramerLayout {
     columns?: number | string[];
     /** The grid rows. */
     rows?: number | string[];
+    /** Per-column width in px (when grid is auto-fill or unconstrained). */
+    columnWidth?: number;
+    /** Per-row height in px (when grid rows is auto / unconstrained). */
+    rowHeight?: number;
     /** The padding. */
     padding?: FramerEdgeInsets;
     /** The margin. */
@@ -242,6 +253,8 @@ export interface FramerImage {
     alt?: string;
     objectFit?: string;
     objectPosition?: string;
+    /** Pre-fetched binary data (populated by the exporter before compilation). */
+    data?: Uint8Array;
 }
 
 /** A reference to an image in a Framer node. */
@@ -251,14 +264,25 @@ export interface FramerImageRef {
     width?: number;
     height?: number;
     mimeType?: string;
+    /** Alt text for the image (accessibility). */
+    alt?: string;
+    /** Pre-fetched binary data (populated by the exporter). */
+    data?: Uint8Array;
+    /** CSS object-fit for an image fill. */
+    objectFit?: 'fill' | 'contain' | 'cover' | 'none' | 'scale-down';
+    /** CSS object-position for an image fill. */
+    objectPosition?: string;
 }
 
 /** The vector properties of a Framer vector node. */
 export interface FramerVector {
     svg?: string;
+    /** Binary SVG bytes when the source API returned a downloadable asset. */
+    data?: Uint8Array;
     pathData?: string;
     src?: string;
     name?: string;
+    mimeType?: string;
 }
 
 /** The component properties of a Framer component node. */
@@ -267,6 +291,46 @@ export interface FramerComponent {
     name: string;
     props?: Record<string, unknown>;
     slots?: Record<string, FramerNode[]>;
+    /**
+     * The component master (definition) body, when the SDK exposes it.
+     *
+     * Parsed as a plain container (`type: 'Frame'`) whose children are the
+     * definition's real body — including slot placeholder nodes (`type:
+     * 'Slot'`) at their true positions. The definition/instance separation
+     * pass uses it as the single implementation body, so named slot content
+     * and per-slot props come from the master instead of being appended to a
+     * synthesized body.
+     */
+    master?: FramerNode;
+    /**
+     * The real source of a CODE component (a component with no canvas
+     * master), when the SDK exposes the code file. The generator emits this
+     * source verbatim as the implementation — the true definition instead of
+     * a synthesized approximation. `dependencies` are the transitive closure
+     * of code files referenced through relative imports (also emitted).
+     */
+    code?: {
+        /** The full source code of the component file. */
+        source: string;
+        /** The file name (e.g. `Phosphor.tsx`). */
+        fileName: string;
+        /** The file path inside the project (e.g. `code/Phosphor.tsx`). */
+        path: string;
+        /** The export name of the component inside the file. */
+        exportName: string;
+        /** Whether the component is the file's default export. */
+        isDefaultExport: boolean;
+        /** Transitive relative-import dependencies (path + source). */
+        dependencies?: Array<{ path: string; source: string }>;
+        /**
+         * Whether the source is a published shared-module bundle fetched from
+         * Framer's CDN (the instance's insertURL IS the bundle) rather than a
+         * code file from the project itself. The generator adapts these
+         * differently: `from 'framer'` rewrites to a local runtime shim, and
+         * instances pass content as a `slots` prop (the module contract).
+         */
+        isModule?: boolean;
+    };
 }
 
 /** A variant of a Framer component. */
@@ -314,6 +378,53 @@ export interface FramerAnimation {
     };
 }
 
+/**
+ * A responsive breakpoint definition from the source document.
+ *
+ * Breakpoints are extracted from the source — never assumed to match
+ * Tailwind's sm/md/lg defaults. `minWidth` is the mobile-first threshold in
+ * px; a minWidth of 0 is the base (mobile) tier.
+ */
+export interface FramerBreakpoint {
+    name: string;
+    minWidth: number;
+}
+
+/**
+ * A per-breakpoint override of a Framer node's layout/sizing/spacing/style.
+ * Keyed by breakpoint name in `FramerNode.responsive`.
+ */
+export interface FramerResponsiveOverride {
+    layout?: {
+        direction?: string;
+        alignItems?: string;
+        justifyContent?: string;
+        gap?: number;
+        flexWrap?: string;
+    };
+    sizing?: {
+        widthMode?: 'fixed' | 'fill' | 'auto' | 'hug';
+        heightMode?: 'fixed' | 'fill' | 'auto' | 'hug';
+        /** The explicit width/height in px (fixed overrides). */
+        width?: number;
+        height?: number;
+        minWidth?: number;
+        maxWidth?: number;
+        minHeight?: number;
+        maxHeight?: number;
+        aspectRatio?: number;
+    };
+    spacing?: {
+        padding?: FramerEdgeInsets;
+    };
+    style?: {
+        fontSize?: number;
+        color?: string;
+        opacity?: number;
+    };
+    visible?: boolean;
+}
+
 /** The source metadata of a Framer node. */
 export interface FramerSource {
     /** The source platform. */
@@ -334,6 +445,14 @@ export interface FramerDocument {
     name: string;
     /** The root nodes of the document. */
     nodes: FramerNode[];
+    /** Font files/URLs collected directly from the source API, when exposed. */
+    fonts?: import('@framer/compiler-ast').FontAsset[];
+    /**
+     * The document's responsive breakpoints. When absent, the compiler falls
+     * back to its default breakpoint scale (extraction stays honest: the
+     * source defines the behavior).
+     */
+    breakpoints?: FramerBreakpoint[];
     /** The document version. */
     version?: string;
     /** The document metadata. */

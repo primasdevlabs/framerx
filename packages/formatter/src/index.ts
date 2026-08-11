@@ -147,3 +147,44 @@ export async function formatContent(content: string, path: string, options: Form
         return content;
     }
 }
+
+/** A syntax validation issue found in a file. */
+export interface SyntaxIssue {
+    /** The parser that was attempted. */
+    parser: string;
+    /** The parser error message. */
+    message: string;
+}
+
+/**
+ * Validate that a file's content parses with its configured parser.
+ *
+ * The exporter must never ship broken code: every generated text file is
+ * parsed with the same Prettier parsers used for formatting, and a parse
+ * failure is reported as an export error. Binary files and unsupported
+ * extensions pass (empty result).
+ */
+export async function validateFileSyntax(file: FormattableFile): Promise<SyntaxIssue[]> {
+    if (file.binary || file.data) return [];
+
+    const entry = getParserEntry(file.path);
+    if (!entry) return [];
+
+    try {
+        await format(file.content, {
+            parser: entry.parser,
+            plugins: entry.plugins,
+            ...DEFAULT_OPTIONS,
+        });
+        return [];
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return [{ parser: entry.parser, message }];
+    }
+}
+
+/** Validate a list of files in parallel. */
+export async function validateFilesSyntax(files: FormattableFile[]): Promise<Map<string, SyntaxIssue[]>> {
+    const results = await Promise.all(files.map(async (file) => [file.path, await validateFileSyntax(file)] as const));
+    return new Map(results);
+}

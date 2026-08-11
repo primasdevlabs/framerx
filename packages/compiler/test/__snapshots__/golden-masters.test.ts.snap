@@ -1,0 +1,893 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden master-backed document > matches the golden snapshot of the generated project 1`] = `
+[
+  {
+    "content": "{
+  "compilerVersion": "0.1.0",
+  "exportedAt": "derivation:2061412946df16af",
+  "projectName": "MasterGolden",
+  "source": {
+    "name": "Master Golden"
+  },
+  "nodes": {
+    "discovered": 21,
+    "preserved": 24
+  },
+  "components": {
+    "definitions": 2,
+    "instances": 5,
+    "fromMasters": 2,
+    "fromCode": 0,
+    "synthesized": 0
+  },
+  "assets": {
+    "discovered": 1,
+    "unique": 1
+  },
+  "fonts": 3,
+  "animations": {
+    "reproduced": 38
+  },
+  "coverage": {
+    "registered": 65,
+    "discovered": 21,
+    "preserved": 24,
+    "emitted": 38,
+    "unsupported": 0,
+    "lost": 0,
+    "properties": [
+      {
+        "id": "animation.hover",
+        "sdkAttribute": "(interaction.animation)",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "animation.mount",
+        "sdkAttribute": "(interaction.animation)",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "animation.tap",
+        "sdkAttribute": "(interaction.animation)",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "animation.viewport",
+        "sdkAttribute": "(interaction.animation.viewport)",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "asset.alt",
+        "sdkAttribute": "backgroundImage.altText",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "asset.image",
+        "sdkAttribute": "backgroundImage | image | src | url",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "asset.svg",
+        "sdkAttribute": "svg / getSVG()",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "component.code",
+        "sdkAttribute": "getCodeFiles()",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "component.identifier",
+        "sdkAttribute": "componentIdentifier",
+        "stage": "emitted",
+        "discoveredCount": 3
+      },
+      {
+        "id": "component.master",
+        "sdkAttribute": "(canvas master)",
+        "stage": "emitted",
+        "discoveredCount": 3
+      },
+      {
+        "id": "component.name",
+        "sdkAttribute": "componentName",
+        "stage": "emitted",
+        "discoveredCount": 3
+      },
+      {
+        "id": "component.props",
+        "sdkAttribute": "controls",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "component.slots",
+        "sdkAttribute": "(master body) named slot nodes",
+        "stage": "ast-preserved",
+        "discoveredCount": 2
+      },
+      {
+        "id": "interaction.link",
+        "sdkAttribute": "link",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.bottom",
+        "sdkAttribute": "bottom",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.gap",
+        "sdkAttribute": "gap",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "layout.gridColumnCount",
+        "sdkAttribute": "gridColumnCount",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.gridColumnWidth",
+        "sdkAttribute": "gridColumnWidth",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.gridRowCount",
+        "sdkAttribute": "gridRowCount",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.gridRowHeight",
+        "sdkAttribute": "gridRowHeight",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.left",
+        "sdkAttribute": "left",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.padding",
+        "sdkAttribute": "padding",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "layout.position",
+        "sdkAttribute": "position",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.right",
+        "sdkAttribute": "right",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.stackAlignment",
+        "sdkAttribute": "stackAlignment",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "layout.stackDirection",
+        "sdkAttribute": "stackDirection",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "layout.stackDistribution",
+        "sdkAttribute": "stackDistribution",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "layout.stackWrapEnabled",
+        "sdkAttribute": "stackWrapEnabled",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.strategy",
+        "sdkAttribute": "layout",
+        "stage": "emitted",
+        "discoveredCount": 7
+      },
+      {
+        "id": "layout.top",
+        "sdkAttribute": "top",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "layout.zIndex",
+        "sdkAttribute": "zIndex",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "node.id",
+        "sdkAttribute": "id",
+        "stage": "emitted",
+        "discoveredCount": 7
+      },
+      {
+        "id": "node.name",
+        "sdkAttribute": "name",
+        "stage": "emitted",
+        "discoveredCount": 7
+      },
+      {
+        "id": "node.rect",
+        "sdkAttribute": "getRect()",
+        "stage": "emitted",
+        "discoveredCount": 7
+      },
+      {
+        "id": "sizing.aspectRatio",
+        "sdkAttribute": "aspectRatio",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "sizing.height",
+        "sdkAttribute": "height",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "sizing.maxHeight",
+        "sdkAttribute": "maxHeight",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "sizing.maxWidth",
+        "sdkAttribute": "maxWidth",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "sizing.minHeight",
+        "sdkAttribute": "minHeight",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "sizing.minWidth",
+        "sdkAttribute": "minWidth",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "sizing.width",
+        "sdkAttribute": "width",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "style.backgroundColor",
+        "sdkAttribute": "backgroundColor",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "style.backgroundGradient",
+        "sdkAttribute": "backgroundGradient",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.blur",
+        "sdkAttribute": "blur",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.borderRadius",
+        "sdkAttribute": "borderRadius",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.cursor",
+        "sdkAttribute": "cursor",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.fills",
+        "sdkAttribute": "fills",
+        "stage": "emitted",
+        "discoveredCount": 1
+      },
+      {
+        "id": "style.imageRendering",
+        "sdkAttribute": "imageRendering",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.opacity",
+        "sdkAttribute": "opacity",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.overflow",
+        "sdkAttribute": "overflow",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.rotation",
+        "sdkAttribute": "rotation",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.shadow",
+        "sdkAttribute": "shadow(s)",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.stroke",
+        "sdkAttribute": "border",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "style.visible",
+        "sdkAttribute": "visible",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "text.alignment",
+        "sdkAttribute": "inlineTextStyle.alignment",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "text.color",
+        "sdkAttribute": "inlineTextStyle.color",
+        "stage": "emitted",
+        "discoveredCount": 2
+      },
+      {
+        "id": "text.decoration",
+        "sdkAttribute": "inlineTextStyle.decoration",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "text.fontFamily",
+        "sdkAttribute": "font.family",
+        "stage": "emitted",
+        "discoveredCount": 2
+      },
+      {
+        "id": "text.fontSize",
+        "sdkAttribute": "inlineTextStyle.fontSize",
+        "stage": "emitted",
+        "discoveredCount": 2
+      },
+      {
+        "id": "text.fontWeight",
+        "sdkAttribute": "font.weight",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "text.italic",
+        "sdkAttribute": "font.style",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "text.italicInline",
+        "sdkAttribute": "inlineTextStyle.italic",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "text.letterSpacing",
+        "sdkAttribute": "inlineTextStyle.letterSpacing",
+        "stage": "discovered",
+        "discoveredCount": 0
+      },
+      {
+        "id": "text.lineHeight",
+        "sdkAttribute": "inlineTextStyle.lineHeight",
+        "stage": "emitted",
+        "discoveredCount": 0
+      },
+      {
+        "id": "text.transform",
+        "sdkAttribute": "inlineTextStyle.transform",
+        "stage": "discovered",
+        "discoveredCount": 0
+      }
+    ]
+  },
+  "validation": {
+    "valid": true,
+    "warnings": 1,
+    "errors": 0
+  }
+}
+",
+    "path": ".export-manifest.json",
+  },
+  {
+    "content": "# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# TypeScript
+*.tsbuildinfo
+",
+    "path": ".gitignore",
+  },
+  {
+    "content": "{
+    "printWidth": 120,
+    "tabWidth": 4,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all"
+}
+",
+    "path": ".prettierrc",
+  },
+  {
+    "content": "import js from '@eslint/js';
+import globals from 'globals';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+    { ignores: ['dist'] },
+    {
+        extends: [js.configs.recommended, ...tseslint.configs.recommended],
+        files: ['**/*.{ts,tsx}'],
+        languageOptions: {
+            ecmaVersion: 2022,
+            globals: globals.browser,
+        },
+        plugins: {
+            'react-hooks': reactHooks,
+            'react-refresh': reactRefresh,
+        },
+        rules: {
+            ...reactHooks.configs.recommended.rules,
+            'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+        },
+    },
+);
+",
+    "path": "eslint.config.js",
+  },
+  {
+    "content": "<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>MasterGolden</title>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
+</html>
+",
+    "path": "index.html",
+  },
+  {
+    "content": "{
+    "name": "@generated/MasterGolden",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc -b && vite build",
+        "preview": "vite preview",
+        "lint": "eslint .",
+        "format": "prettier --write \\"src/**/*.{ts,tsx,css}\\""
+    },
+    "dependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "motion": "^12.0.0"
+    },
+    "devDependencies": {
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
+        "@vitejs/plugin-react": "^4.3.0",
+        "autoprefixer": "^10.4.0",
+        "eslint": "^9.0.0",
+        "@eslint/js": "^9.0.0",
+        "eslint-plugin-react-hooks": "^5.0.0",
+        "eslint-plugin-react-refresh": "^0.4.0",
+        "typescript-eslint": "^8.0.0",
+        "postcss": "^8.4.0",
+        "prettier": "^3.3.0",
+        "tailwindcss": "^3.4.0",
+        "typescript": "^5.5.0",
+        "vite": "^6.0.0"
+    }
+}
+",
+    "path": "package.json",
+  },
+  {
+    "content": "export default {
+    plugins: {
+        tailwindcss: {},
+        autoprefixer: {},
+    },
+};
+",
+    "path": "postcss.config.js",
+  },
+  {
+    "content": "# MasterGolden
+
+Generated by **FramerX** — the Framer-to-Code compiler.
+
+## Getting Started
+
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+
+## Project Structure
+
+\`\`\`
+src/
+    components/   Reusable React components
+    sections/     Page sections
+    styles/       Global styles (Tailwind)
+    App.tsx       Main application
+    main.tsx      Entry point
+\`\`\`
+
+## Scripts
+
+| Script            | Description                  |
+| ----------------- | ---------------------------- |
+| \`npm run dev\`     | Start the dev server         |
+| \`npm run build\`   | Build for production         |
+| \`npm run preview\` | Preview the production build |
+| \`npm run lint\`    | Lint the codebase            |
+| \`npm run format\`  | Format with Prettier         |
+
+## Tech Stack
+
+- **React 19** — UI framework
+- **TypeScript** — Strict type checking
+- **Tailwind CSS** — Utility-first styling
+- **Motion** — Animations
+- **Vite** — Build tooling
+",
+    "path": "README.md",
+  },
+  {
+    "content": "import { CardGridSection } from './sections/CardGridSection';
+
+export default function App() {
+    return (
+        <main className="min-h-screen bg-white">
+            <CardGridSection />
+        </main>
+    );
+}
+",
+    "path": "src/App.tsx",
+  },
+  {
+    "content": "<svg viewBox="0 0 24 24"><path d="M12 2l3 7 7 .9-5 4.9 1.5 7L12 18l-6.5 3.8L7 14.8 2 9.9 9 9z" fill="#f59e0b"/></svg>",
+    "path": "src/assets/images/Star-Icon.svg",
+  },
+  {
+    "content": "interface ButtonProps {
+    className?: string;
+    size?: string;
+}
+
+export function Button({ className }: ButtonProps) {
+    return (
+        <div
+            className={
+                className ??
+                'w-fit h-10 py-[10px] px-5 flex flex-row items-center justify-center gap-2 bg-indigo-500 rounded-lg'
+            }
+        >
+            <p className="w-20 h-5 text-sm font-semibold text-white">Action</p>
+        </div>
+    );
+}
+",
+    "path": "src/components/Button.tsx",
+  },
+  {
+    "content": "import type { ReactNode } from 'react';
+import { Button } from './Button';
+interface CardProps {
+    className?: string;
+    icon?: ReactNode;
+    content?: ReactNode;
+}
+
+export function Card({ className, icon, content }: CardProps) {
+    return (
+        <div
+            className={className ?? 'w-80 h-65 p-6 flex flex-col items-start justify-start gap-3 bg-white rounded-2xl'}
+        >
+            <p className="w-50 h-6 text-lg font-bold text-slate-900">Card Title</p>
+            {icon ?? (
+                <>
+                    <Button size="md" />
+                </>
+            )}
+            {content ?? (
+                <>
+                    <p className="w-68 h-12 text-base text-slate-700 leading-normal">Default card body</p>
+                </>
+            )}
+            <p className="w-50 h-5 text-sm font-semibold text-slate-500">Card Footer</p>
+        </div>
+    );
+}
+",
+    "path": "src/components/Card.tsx",
+  },
+  {
+    "content": "import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './styles/index.css';
+import App from './App';
+
+createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+        <App />
+    </StrictMode>,
+);
+",
+    "path": "src/main.tsx",
+  },
+  {
+    "content": "import { Card } from '../components/Card';
+import { Button } from '../components/Button';
+interface CardGridSectionProps {
+    className?: string;
+}
+
+export function CardGridSection({ className }: CardGridSectionProps) {
+    return (
+        <section
+            className={className ?? 'w-full h-100 p-20 flex flex-row items-stretch justify-between gap-6 bg-slate-50'}
+        >
+            <Card
+                icon={
+                    <svg className="w-6 h-6" viewBox="0 0 24 24">
+                        <path d="M12 2l3 7 7 .9-5 4.9 1.5 7L12 18l-6.5 3.8L7 14.8 2 9.9 9 9z" fill="#f59e0b" />
+                    </svg>
+                }
+                content={<p className="w-68 h-12 text-base text-slate-700">Custom body one</p>}
+            />
+            <Card content={<p className="w-68 h-12 text-base text-slate-700">Custom body two</p>} />
+            <Button />
+        </section>
+    );
+}
+",
+    "path": "src/sections/CardGridSection.tsx",
+  },
+  {
+    "content": "@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    font-family:
+        'Inter',
+        system-ui,
+        -apple-system,
+        sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+",
+    "path": "src/styles/index.css",
+  },
+  {
+    "content": "/** Design tokens extracted from the compiled document. */
+export const colors = {
+    slate50: '#f8fafc',
+    white: '#ffffff',
+    slate900: '#0f172a',
+    slate700: '#334155',
+    slate500: '#64748b',
+    indigo500: '#6366f1',
+} as const;
+
+export const radii = {} as const;
+
+export const spacing = {
+    30: 120,
+    50: 200,
+    65: 260,
+    68: 272,
+    100: 400,
+} as const;
+
+/** A gradient stop: a color at a position along the gradient (0-1). */
+export type GradientStop = {
+    color: ColorValue;
+    position: number;
+};
+
+/** A gradient fill definition (stops carry positions for exact fidelity). */
+export type GradientValue = {
+    /** The gradient angle in degrees (linear gradients). */
+    angle?: number;
+    /** The gradient center (radial gradients). */
+    center?: { x: number; y: number };
+    /** The gradient stops, in order. */
+    stops: [GradientStop, GradientStop, ...GradientStop[]];
+};
+
+/** A color value from the design token palette. */
+export type ColorValue = (typeof colors)[keyof typeof colors];
+
+/** A radius value from the design token palette. */
+export type RadiusValue = (typeof radii)[keyof typeof radii];
+
+/** A spacing/size value from the design token palette. */
+export type SpacingValue = (typeof spacing)[keyof typeof spacing];
+",
+    "path": "src/tokens.ts",
+  },
+  {
+    "content": "/// <reference types="vite/client" />
+",
+    "path": "src/vite-env.d.ts",
+  },
+  {
+    "content": "import type { Config } from 'tailwindcss';
+
+const config: Config = {
+    content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+    theme: {
+        extend: {
+            colors: {},
+            fontSize: {
+                sm: '14px',
+                base: '16px',
+                lg: '18px',
+            },
+            borderRadius: {},
+            spacing: {
+                '30': '120px',
+                '50': '200px',
+                '65': '260px',
+                '68': '272px',
+                '100': '400px',
+            },
+            fontFamily: {
+                inter: 'Inter',
+            },
+        },
+    },
+    plugins: [],
+};
+
+export default config;
+",
+    "path": "tailwind.config.ts",
+  },
+  {
+    "content": "{
+    "compilerOptions": {
+        "target": "ES2022",
+        "useDefineForClassFields": true,
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "skipLibCheck": true,
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "verbatimModuleSyntax": true,
+        "moduleDetection": "force",
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUncheckedSideEffectImports": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["./src/*"]
+        }
+    },
+    "include": ["src"]
+}
+",
+    "path": "tsconfig.json",
+  },
+  {
+    "content": "import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+    plugins: [react()],
+    resolve: {
+        alias: {
+            '@': '/src',
+        },
+    },
+});
+",
+    "path": "vite.config.ts",
+  },
+]
+`;

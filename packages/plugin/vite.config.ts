@@ -22,6 +22,9 @@ function alias(pkg: string): string {
 
 export default defineConfig({
     plugins: [react(), framer()],
+    server: {
+        port: 5174,
+    },
     resolve: {
         alias: {
             '@framer/compiler-ast': alias('ast'),

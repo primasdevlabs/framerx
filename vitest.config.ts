@@ -17,10 +17,15 @@ export default defineConfig({
             '@framer/compiler-generators': alias('generators'),
             '@framer/compiler-formatter': alias('formatter'),
             '@framer/compiler-zip': alias('zip'),
+            '@framer/visual-regression': alias('visual-regression'),
         },
     },
     test: {
         environment: 'node',
         include: ['packages/**/test/**/*.test.ts'],
+        // Integration tests run the full pipeline (generate → format →
+        // validate → ZIP) two or three times per test; on loaded developer
+        // machines concurrent workers push those well past the 5s default.
+        testTimeout: 20000,
     },
 });

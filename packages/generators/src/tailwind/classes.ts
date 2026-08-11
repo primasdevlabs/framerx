@@ -17,6 +17,7 @@ import {
 } from '@framer/compiler-shared';
 
 import { matchPalette } from './palette';
+import { responsiveClassName } from '../responsive/css';
 import type { DesignTokens } from './tokens';
 
 /** Generate Tailwind classes for a node's layout and style. */
@@ -36,6 +37,10 @@ export function generateClasses(node: DesignNode, tokens?: DesignTokens): string
         const typographyClasses = generateTypographyClasses(node, tokens);
         typographyClasses.forEach((c) => classes.add(c));
     }
+
+    // Responsive behavior class (media-query overrides live in responsive.css)
+    const responsiveClass = responsiveClassName(node);
+    if (responsiveClass) classes.add(responsiveClass);
 
     return Array.from(classes);
 }
@@ -59,13 +64,42 @@ export function generateLayoutClasses(node: DesignNode, tokens?: DesignTokens): 
         classes.push(sizeClass('h', node.frame.height, tokens));
     }
 
+    // Sizing constraints — the classic "fill but cap at X" pattern (fill +
+    // max-width) and min/aspect sizing must survive into the output or the
+    // layout collapses. Exact px arbitrary values, never bucketed.
+    const sizing = layout.sizing;
+    if (sizing.minWidth !== undefined) classes.push(`min-w-[${formatExact(sizing.minWidth)}px]`);
+    if (sizing.maxWidth !== undefined) classes.push(`max-w-[${formatExact(sizing.maxWidth)}px]`);
+    if (sizing.minHeight !== undefined) classes.push(`min-h-[${formatExact(sizing.minHeight)}px]`);
+    if (sizing.maxHeight !== undefined) classes.push(`max-h-[${formatExact(sizing.maxHeight)}px]`);
+    if (sizing.aspectRatio !== undefined) classes.push(`aspect-[${formatExact(sizing.aspectRatio)}]`);
+
     // Positioning
-    if (layout.position.mode === 'absolute') classes.push('absolute');
-    if (layout.position.mode === 'relative') classes.push('relative');
-    if (layout.position.mode === 'fixed') classes.push('fixed');
-    if (layout.position.mode === 'sticky') classes.push('sticky');
-    if (layout.position.zIndex !== undefined && layout.position.zIndex !== 0) {
-        classes.push(zIndexClass(layout.position.zIndex));
+    const position = layout.position;
+    if (position.mode === 'absolute') classes.push('absolute');
+    else if (position.mode === 'relative') classes.push('relative');
+    else if (position.mode === 'fixed') classes.push('fixed');
+    else if (position.mode === 'sticky') classes.push('sticky');
+    else if (node.children.some((child) => child.layout.position.mode === 'absolute')) {
+        // A static container with absolutely positioned children must become
+        // their positioning context — otherwise they anchor to the nearest
+        // positioned ancestor (often the page) and the design collapses.
+        classes.push('relative');
+    }
+    if (position.zIndex !== undefined && position.zIndex !== 0) {
+        classes.push(zIndexClass(position.zIndex));
+    }
+
+    // Offsets — exact px (negative values render as left-[-12px]); zero as left-0.
+    const offsets: Array<[string, number | undefined]> = [
+        ['left', position.left],
+        ['top', position.top],
+        ['right', position.right],
+        ['bottom', position.bottom],
+    ];
+    for (const [prop, value] of offsets) {
+        if (value === undefined) continue;
+        classes.push(isZero(value) ? `${prop}-0` : `${prop}-[${formatExact(value)}px]`);
     }
 
     // Spacing
@@ -301,12 +335,17 @@ function colorClassName(color: string, tokens?: DesignTokens): string | undefine
     return tokens ? Object.entries(tokens.colors).find(([, value]) => value === normalized)?.[0] : undefined;
 }
 
-/** Map a border width to a Tailwind-compatible suffix ('' = default 1px). */
+/**
+ * Map a border width to a Tailwind-compatible suffix ('' = default 1px).
+ *
+ * Only exact Tailwind scale values map to bare classes; everything else uses
+ * an exact arbitrary value — a 1.5px border must stay 1.5px, not round to 1px.
+ */
 function borderWidthToTailwind(width: number): string {
-    const rounded = Math.round(width);
-    if (rounded <= 1) return '';
-    if (rounded === 2 || rounded === 4 || rounded === 8) return String(rounded);
-    return `[${rounded}px]`;
+    if (width === 0) return '0';
+    if (width === 1) return '';
+    if (width === 2 || width === 4 || width === 8) return String(width);
+    return `[${formatExact(width)}px]`;
 }
 
 /** Build a radius class, handling the Tailwind default (no suffix). */
@@ -338,13 +377,18 @@ function spacingSuffix(value: number, tokens?: DesignTokens): string {
     if (unit === 0) return '0';
     if (Number.isInteger(unit) && DEFAULT_SPACING_SCALE[unit] !== undefined) return String(unit);
     if (Number.isInteger(unit) && tokens?.spacing[String(unit)] !== undefined) return String(unit);
-    return `[${Math.round(value * 100) / 100}px]`;
+    return `[${formatExact(value)}px]`;
 }
 
 /** Convert a pixel size to a Tailwind size class (w-/h-), token-aware. */
 function sizeClass(prefix: string, value: number, tokens?: DesignTokens): string {
     const suffix = spacingSuffix(value, tokens);
     return `${prefix}-${suffix}`;
+}
+
+/** Format a number without unnecessary rounding (keeps up to 3 decimals). */
+function formatExact(value: number): string {
+    return String(Math.round(value * 1000) / 1000);
 }
 
 /** Convert a font size to a Tailwind size suffix. */
@@ -390,23 +434,36 @@ function weightToName(weight: number): string {
     }
 }
 
-/** Convert a letter spacing value to a Tailwind tracking suffix. */
+/**
+ * Convert a letter spacing value to a Tailwind tracking suffix.
+ *
+ * Tailwind's tracking classes are exact em values (wide = 0.025em, widest =
+ * 0.1em). A value only maps to a class when it matches exactly; anything else
+ * becomes an exact arbitrary value, so 0.03em never silently renders as
+ * 0.025em.
+ */
 function trackingToTailwind(value: number): string {
-    if (value <= -0.05) return 'tighter';
-    if (value <= -0.025) return 'tight';
-    if (value < 0.025) return 'normal';
-    if (value < 0.05) return 'wide';
-    if (value < 0.1) return 'wider';
-    return 'widest';
+    if (value === -0.05) return 'tighter';
+    if (value === -0.025) return 'tight';
+    if (value === 0) return 'normal';
+    if (value === 0.025) return 'wide';
+    if (value === 0.05) return 'wider';
+    if (value === 0.1) return 'widest';
+    return `[${formatExact(value)}em]`;
 }
 
-/** Convert a line height to a Tailwind leading suffix. */
+/**
+ * Convert a line height to a Tailwind leading suffix.
+ *
+ * Same exactness rule as tracking: bare classes only for exact scale matches,
+ * otherwise an exact arbitrary value (1.1 stays 1.1, not leading-tight 1.25).
+ */
 function lineHeightToTailwind(value: number): string {
-    if (value <= 1) return 'none';
-    if (value <= 1.25) return 'tight';
-    if (value <= 1.375) return 'snug';
-    if (value <= 1.5) return 'normal';
-    if (value <= 1.625) return 'relaxed';
-    if (value <= 2) return 'loose';
-    return `[${value}]`;
+    if (value === 1) return 'none';
+    if (value === 1.25) return 'tight';
+    if (value === 1.375) return 'snug';
+    if (value === 1.5) return 'normal';
+    if (value === 1.625) return 'relaxed';
+    if (value === 2) return 'loose';
+    return `[${formatExact(value)}]`;
 }

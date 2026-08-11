@@ -48,7 +48,8 @@ export function toTailwindSpacing(value: number): string {
     if (Number.isInteger(spacing) && DEFAULT_SPACING_SCALE[spacing] !== undefined) {
         return String(spacing);
     }
-    return `[${Math.round(value * 100) / 100}px]`;
+    // Keep source precision: arbitrary values never round below 3 decimals.
+    return `[${Math.round(value * 1000) / 1000}px]`;
 }
 
 /** Clamp a value between min and max. */

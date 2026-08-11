@@ -28,6 +28,8 @@ export interface VisualStyle {
     transform?: Transform;
     /** CSS filter effects. */
     filters?: Filter[];
+    /** Image rendering hint (e.g. `'crisp-edges'`, `'pixelated'`, `'auto'`). */
+    imageRendering?: string;
 }
 
 /** A CSS transform definition. */

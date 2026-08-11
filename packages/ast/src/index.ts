@@ -13,4 +13,5 @@ export * from './interaction';
 export * from './constraints';
 export * from './asset';
 export * from './nodes';
+export * from './component';
 export * from './document';

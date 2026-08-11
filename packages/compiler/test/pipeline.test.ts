@@ -256,22 +256,34 @@ describe('generators', () => {
         expect(card!.content).toContain("import { type GradientValue } from '../tokens';");
         expect(card!.content).toContain('gradient?: GradientValue;');
         expect(card!.content).toContain('gradientLabel?: string;');
-        expect(card!.content).toContain('background: `linear-gradient(${gradient.angle ?? 0}deg, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})`');
+        // Prettier breaks the guarded ternary across lines; the `: undefined`
+        // else-branch is what keeps the optional prop strict-tsc-safe.
+        expect(card!.content).toContain('background: gradient');
+        expect(card!.content).toContain('? `linear-gradient(${gradient.angle ?? 0}deg, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})`');
+        expect(card!.content).toContain(': undefined,');
         expect(card!.content).not.toContain("import { colors }");
 
-        // Instances pass gradient object literals with token-referenced stops.
+        // Instances pass gradient object literals with token-referenced stops
+        // (Prettier formats the object across lines).
         const section = findFile(project, 'src/sections/GradientSection.tsx');
         expect(section).toBeDefined();
-        expect(section!.content).toContain('gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.violet500, position: 1 }], angle: 135 }}');
+        expect(section!.content).toContain('{ color: colors.indigo500, position: 0 },');
+        expect(section!.content).toContain('{ color: colors.violet500, position: 1 },');
+        expect(section!.content).toContain('angle: 135,');
         expect(section!.content).toContain('gradientLabel="Indigo to Violet"');
         // The three-stop card carries its non-even middle position (12.5%).
-        expect(section!.content).toContain('{ color: colors.white, position: 0.25 }');
+        expect(section!.content).toContain('{ color: colors.white, position: 0.25 },');
         expect(section!.content).toContain("import { colors } from '../tokens';");
 
         // The tokens module carries the gradient types and stop colors.
         const tokensFile = findFile(project, 'src/tokens.ts');
         expect(tokensFile!.content).toContain('export type GradientValue');
         expect(tokensFile!.content).toContain("sky500: '#0ea5e9'");
+
+        // The label's off-scale width (316px → unit 79) becomes a theme token;
+        // Tailwind silently ignores unknown classes, so assert it explicitly.
+        const config = findFile(project, 'tailwind.config.ts');
+        expect(config!.content).toContain("'79': '316px'");
     });
 
     it('renders instance color props as token references', async () => {

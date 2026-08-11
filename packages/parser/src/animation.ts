@@ -3,7 +3,7 @@
  */
 
 import type { Animation, AnimationConfig, AnimationState, AnimatedProperties, AnimationTrigger, Easing, TweenConfig, ViewportConfig } from '@framer/compiler-ast';
-import { generateId } from '@framer/compiler-shared';
+import { stableId } from '@framer/compiler-shared';
 
 import type { FramerAnimation, FramerInteraction } from './types';
 
@@ -16,6 +16,7 @@ export function parseAnimations(interactions?: FramerInteraction[]): AnimationSt
     let animate: AnimatedProperties | undefined;
     let exit: AnimatedProperties | undefined;
     let viewport: ViewportConfig | undefined;
+    const seenAnimationIds = new Set<string>();
 
     for (const interaction of interactions) {
         if (!interaction.animation) continue;
@@ -42,7 +43,7 @@ export function parseAnimations(interactions?: FramerInteraction[]): AnimationSt
         }
 
         animations.push({
-            id: generateId('anim'),
+            id: uniqueAnimationId(trigger, config, properties, seenAnimationIds),
             trigger,
             config,
             properties,
@@ -61,6 +62,28 @@ export function parseAnimations(interactions?: FramerInteraction[]): AnimationSt
         exit,
         viewport,
     };
+}
+
+/**
+ * A deterministic animation id derived from the animation's own content.
+ * Two identical interactions on the same node produce distinct ids via an
+ * index suffix, so ids never depend on traversal order or wall-clock time.
+ */
+function uniqueAnimationId(
+    trigger: AnimationTrigger,
+    config: AnimationConfig,
+    properties: AnimatedProperties,
+    used: Set<string>,
+): string {
+    const base = stableId('anim', JSON.stringify({ trigger, config, properties }));
+    if (!used.has(base)) {
+        used.add(base);
+        return base;
+    }
+    let index = 2;
+    while (used.has(`${base}_${index}`)) index += 1;
+    used.add(`${base}_${index}`);
+    return `${base}_${index}`;
 }
 
 /** Map a Framer interaction trigger to a Design AST AnimationTrigger. */
@@ -133,64 +156,86 @@ export function parseAnimatedProperties(properties?: Record<string, unknown>): A
 
     const result: AnimatedProperties = {};
 
+    const parseVal = (val: unknown) => {
+        if (Array.isArray(val)) {
+            return val.map((item) => (typeof item === 'object' && item !== null && 'value' in item ? item : { value: item }));
+        }
+        return val;
+    };
+
     for (const [key, value] of Object.entries(properties)) {
         switch (key) {
             case 'opacity':
-                result.opacity = value as number;
+                result.opacity = parseVal(value) as AnimatedProperties['opacity'];
                 break;
             case 'x':
-                result.x = value as number | string;
+                result.x = parseVal(value) as AnimatedProperties['x'];
                 break;
             case 'y':
-                result.y = value as number | string;
+                result.y = parseVal(value) as AnimatedProperties['y'];
                 break;
             case 'scale':
-                result.scale = value as number;
+                result.scale = parseVal(value) as AnimatedProperties['scale'];
                 break;
             case 'scaleX':
-                result.scaleX = value as number;
+                result.scaleX = parseVal(value) as AnimatedProperties['scaleX'];
                 break;
             case 'scaleY':
-                result.scaleY = value as number;
+                result.scaleY = parseVal(value) as AnimatedProperties['scaleY'];
                 break;
             case 'rotate':
-                result.rotate = value as number;
+                result.rotate = parseVal(value) as AnimatedProperties['rotate'];
                 break;
             case 'rotateX':
-                result.rotateX = value as number;
+                result.rotateX = parseVal(value) as AnimatedProperties['rotateX'];
                 break;
             case 'rotateY':
-                result.rotateY = value as number;
+                result.rotateY = parseVal(value) as AnimatedProperties['rotateY'];
+                break;
+            case 'rotateZ':
+                result.rotateZ = parseVal(value) as AnimatedProperties['rotateZ'];
                 break;
             case 'skewX':
-                result.skewX = value as number;
+                result.skewX = parseVal(value) as AnimatedProperties['skewX'];
                 break;
             case 'skewY':
-                result.skewY = value as number;
+                result.skewY = parseVal(value) as AnimatedProperties['skewY'];
+                break;
+            case 'transformOrigin':
+            case 'originX':
+            case 'originY':
+                if (key === 'transformOrigin') {
+                    result.transformOrigin = value as string;
+                } else if (typeof value === 'number') {
+                    result.transformOrigin = key === 'originX' ? `${value * 100}% 50%` : `50% ${value * 100}%`;
+                }
+                break;
+            case 'perspective':
+                result.perspective = value as number | string;
                 break;
             case 'width':
-                result.width = value as number | string;
+                result.width = parseVal(value) as AnimatedProperties['width'];
                 break;
             case 'height':
-                result.height = value as number | string;
+                result.height = parseVal(value) as AnimatedProperties['height'];
                 break;
             case 'backgroundColor':
-                result.backgroundColor = value as string;
+                result.backgroundColor = parseVal(value) as AnimatedProperties['backgroundColor'];
                 break;
             case 'color':
-                result.color = value as string;
+                result.color = parseVal(value) as AnimatedProperties['color'];
                 break;
             case 'borderRadius':
-                result.borderRadius = value as number | string;
+                result.borderRadius = parseVal(value) as AnimatedProperties['borderRadius'];
                 break;
             case 'boxShadow':
-                result.boxShadow = value as string;
+                result.boxShadow = parseVal(value) as AnimatedProperties['boxShadow'];
                 break;
             case 'filter':
-                result.filter = value as string;
+                result.filter = parseVal(value) as AnimatedProperties['filter'];
                 break;
             case 'clipPath':
-                result.clipPath = value as string;
+                result.clipPath = parseVal(value) as AnimatedProperties['clipPath'];
                 break;
             default:
                 break;

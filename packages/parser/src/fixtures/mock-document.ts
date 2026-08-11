@@ -26,6 +26,14 @@ const heroFrame: FramerNode = {
     style: {
         fills: [{ type: 'solid', color: '#0f172a', visible: true }],
     },
+    // Responsive: the hero's vertical padding tightens at the tablet tier.
+    responsive: {
+        tablet: {
+            spacing: {
+                padding: { top: 56, right: 24, bottom: 56, left: 24 },
+            },
+        },
+    },
     children: [
         {
             id: 'text_heading',
@@ -33,19 +41,26 @@ const heroFrame: FramerNode = {
             name: 'Heading',
             frame: { x: 24, y: 200, width: 700, height: 96 },
             layout: { strategy: 'auto' },
-            style: {},
-            text: {
-                text: 'Build Production-Ready Apps',
-                style: {
-                    fontFamily: 'Inter',
-                    fontSize: 64,
-                    fontWeight: 700,
-                    lineHeight: 1.1,
-                    color: '#ffffff',
-                    textAlign: 'center',
+            style: {},                text: {
+                    text: 'Build Production-Ready Apps',
+                    style: {
+                        fontFamily: 'Inter',
+                        fontSize: 64,
+                        fontWeight: 700,
+                        lineHeight: 1.1,
+                        color: '#ffffff',
+                        textAlign: 'center',
+                    },
+                },
+                // Responsive: the headline scales down at the tablet tier.
+                responsive: {
+                    tablet: {
+                        style: {
+                            fontSize: 48,
+                        },
+                    },
                 },
             },
-        },
         {
             id: 'text_subheading',
             type: 'Text',
@@ -205,6 +220,17 @@ const cardsSection: FramerNode = {
     },
     style: {
         fills: [{ type: 'solid', color: '#f8fafc', visible: true }],
+    },
+    // Responsive: the cards grid tightens its padding and gap at tablet.
+    responsive: {
+        tablet: {
+            spacing: {
+                padding: { top: 40, right: 40, bottom: 40, left: 40 },
+            },
+            layout: {
+                gap: 16,
+            },
+        },
     },
     children: [
         {
@@ -676,6 +702,13 @@ export const mockFramerDocument: FramerDocument = {
     id: 'doc_mock_landing',
     name: 'Marketing Landing Page',
     version: '1.0.0',
+    // The document defines its OWN breakpoints — the compiler emits media
+    // queries at these exact widths, never assumed Tailwind sm/md/lg.
+    breakpoints: [
+        { name: 'mobile', minWidth: 0 },
+        { name: 'tablet', minWidth: 768 },
+        { name: 'desktop', minWidth: 1024 },
+    ],
     nodes: [heroFrame, cardsSection, animatedFrame, testimonialsSection, metricsSection, gradientsSection],
     metadata: {
         platform: 'framer',

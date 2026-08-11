@@ -65,8 +65,11 @@ export interface AnimatedProperties {
     rotate?: number | KeyframeValue[];
     rotateX?: number | KeyframeValue[];
     rotateY?: number | KeyframeValue[];
+    rotateZ?: number | KeyframeValue[];
     skewX?: number | KeyframeValue[];
     skewY?: number | KeyframeValue[];
+    transformOrigin?: string;
+    perspective?: number | string;
     width?: number | string | KeyframeValue[];
     height?: number | string | KeyframeValue[];
     backgroundColor?: string | KeyframeValue[];

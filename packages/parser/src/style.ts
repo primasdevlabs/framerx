@@ -46,6 +46,7 @@ export function parseStyle(style?: FramerStyle): VisualStyle {
     if (style.visible !== undefined) result.visible = style.visible;
     if (style.overflow) result.overflow = style.overflow as VisualStyle['overflow'];
     if (style.cursor) result.cursor = style.cursor;
+    if (style.imageRendering) result.imageRendering = style.imageRendering;
     if (style.transform) result.transform = parseTransform(style.transform);
     if (style.filters) {
         const filters = style.filters.map(parseFilter);
@@ -89,8 +90,20 @@ export function parseFill(fill: FramerFill): Fill | null {
             };
         }
         case 'image':
-            // Image fills are handled by the image node parser.
-            return null;
+            if (!fill.image?.src) return null;
+            return {
+                type: 'image',
+                image: {
+                    src: fill.image.src,
+                    name: fill.image.name,
+                    width: fill.image.width,
+                    height: fill.image.height,
+                    mimeType: fill.image.mimeType,
+                    data: fill.image.data,
+                    objectFit: fill.image.objectFit,
+                    objectPosition: fill.image.objectPosition,
+                },
+            };
         default:
             return null;
     }

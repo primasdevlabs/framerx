@@ -25,6 +25,10 @@ export interface AssetRef {
     size?: number;
     /** The alt text for the asset (for accessibility). */
     alt?: string;
+    /** The binary data of the asset (if pre-fetched by the exporter). */
+    data?: Uint8Array;
+    /** The text content (for inline SVGs). */
+    text?: string;
 }
 
 /** A collected asset for export. */
@@ -67,7 +71,12 @@ export interface FontAsset {
     style: 'normal' | 'italic';
     /** The font file URLs. */
     sources: Array<{
+        /** The source URL, when the plugin API exposes one. */
         url: string;
         format: 'woff' | 'woff2' | 'ttf' | 'otf';
+        /** The original font bytes, when accessible through the source API. */
+        data?: Uint8Array;
+        /** The source MIME type, when exposed. */
+        mimeType?: string;
     }>;
 }

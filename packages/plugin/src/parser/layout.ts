@@ -52,7 +52,15 @@ function mapJustifyContent(distribution?: string | null): string {
     }
 }
 
-/** Map a stack alignment to a flex cross-axis alignment. */
+/**
+ * Map a stack alignment to a flex cross-axis alignment.
+ *
+ * Framer's cross-axis alignment is start | center | end only — there is no
+ * stretch. Children stretch by their own fill sizing (`w-full`/`h-full`), never
+ * by the container's alignment. The default (designer never touched it) is
+ * start, so a null alignment MUST NOT map to 'stretch': that would blow every
+ * default-stack child up to fill the cross axis.
+ */
 function mapAlignItems(alignment?: string | null): string {
     switch (alignment) {
         case 'start':
@@ -62,7 +70,7 @@ function mapAlignItems(alignment?: string | null): string {
         case 'center':
             return 'center';
         default:
-            return 'stretch';
+            return 'flex-start';
     }
 }
 
@@ -81,6 +89,15 @@ export function parseLayout(node: SdkNode): FramerLayout {
         layout.strategy = 'grid';
         layout.columns = node.gridColumnCount && node.gridColumnCount !== 'auto-fill' ? node.gridColumnCount : 1;
         layout.rows = node.gridRowCount ?? undefined;
+        // `gridColumnWidth` / `gridRowHeight` are per-axis fixed sizes in
+        // pixels; preserved through to the DesignAST so the generator
+        // can emit `grid-template-columns / rows: repeat(N, <size>px)`.
+        if (node.gridColumnWidth !== null && node.gridColumnWidth !== undefined && Number.isFinite(node.gridColumnWidth)) {
+            layout.columnWidth = node.gridColumnWidth;
+        }
+        if (node.gridRowHeight !== null && node.gridRowHeight !== undefined && Number.isFinite(node.gridRowHeight)) {
+            layout.rowHeight = node.gridRowHeight;
+        }
     } else {
         layout.strategy = node.position === 'absolute' ? 'absolute' : 'auto';
     }

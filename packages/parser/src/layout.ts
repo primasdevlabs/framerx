@@ -42,7 +42,9 @@ export function parseLayoutStyle(layout?: FramerLayout): LayoutStyle {
             return {
                 strategy: 'flex',
                 direction: layout?.direction ?? 'row',
-                alignItems: (layout?.alignItems as FlexLayout['alignItems']) ?? 'stretch',
+                // Framer's cross-axis default is start — children stretch via
+                // their own fill sizing, never the container's alignment.
+                alignItems: (layout?.alignItems as FlexLayout['alignItems']) ?? 'flex-start',
                 justifyContent: (layout?.justifyContent as FlexLayout['justifyContent']) ?? 'flex-start',
                 flexWrap: (layout?.flexWrap as FlexLayout['flexWrap']) ?? 'nowrap',
                 gap: layout?.gap ?? 0,
@@ -54,6 +56,8 @@ export function parseLayoutStyle(layout?: FramerLayout): LayoutStyle {
                 strategy: 'grid',
                 columns: (layout?.columns as number | string[] | undefined) ?? 1,
                 rows: (layout?.rows as number | string[] | undefined) ?? 1,
+                columnWidth: layout?.columnWidth,
+                rowHeight: layout?.rowHeight,
                 columnGap: layout?.columnGap ?? 0,
                 rowGap: layout?.rowGap ?? 0,
                 alignItems: 'stretch',

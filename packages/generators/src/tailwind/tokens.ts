@@ -221,7 +221,7 @@ export function extractTokens(document: DesignDocument): DesignTokens {
         const fill = style.fills?.[0];
         if (fill?.type === 'solid') {
             addColor(fill.color, node, 'backgroundColor');
-        } else if (fill && !sProps?.gradient) {
+        } else if (fill && !sProps?.gradient && fill.type !== 'image') {
             // Gradient fills render as inline backgrounds with token refs
             // (`background: \`linear-gradient(135deg, ${colors.indigo500} …)\``).
             // Their stop colors get module names but never theme entries — no
@@ -230,6 +230,7 @@ export function extractTokens(document: DesignDocument): DesignTokens {
             // (non-solid stroke fills) remain unrendered, matching the class
             // generator's solid-stroke-only boundary. Prop-driven gradients
             // are skipped — their values live in instance props instead.
+            // Image fills are also skipped — they have no stops.
             for (const stop of fill.stops) addColorName(normalizeColor(stop.color));
         }
         const stroke = style.strokes?.[0];

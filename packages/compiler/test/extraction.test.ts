@@ -696,7 +696,7 @@ describe('extraction pipeline', () => {
         expect(file).toBeDefined();
         expect(file.content).toContain("import { type GradientValue } from '../tokens';");
         expect(file.content).toContain('gradient?: GradientValue;');
-        expect(file.content).toContain('background: `linear-gradient(${gradient.angle ?? 0}deg, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})`');
+        expect(file.content).toContain('background: gradient ? `linear-gradient(${gradient.angle ?? 0}deg, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})` : undefined');
         expect(file.content).not.toContain("import { colors }");
 
         // Instances pass object literals whose stops are token-referenced
@@ -751,7 +751,7 @@ describe('extraction pipeline', () => {
         // and stop positions.
         const file = project.files.find((f) => f.path === 'src/components/InfoCard.tsx')!;
         expect(file).toBeDefined();
-        expect(file.content).toContain('background: `radial-gradient(circle at ${(gradient.center?.x ?? 0.5) * 100}% ${(gradient.center?.y ?? 0.5) * 100}%, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})`');
+        expect(file.content).toContain('background: gradient ? `radial-gradient(circle at ${(gradient.center?.x ?? 0.5) * 100}% ${(gradient.center?.y ?? 0.5) * 100}%, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})` : undefined');
 
         // Instances pass centers and token-referenced stop color/position pairs.
         const section = project.files.find((f) => f.path === 'src/sections/CardsSection.tsx')!;

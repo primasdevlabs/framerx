@@ -10,3 +10,6 @@ coverage
 demo-output
 .turbo
 .freebuff
+.vr-out
+.vr-browser-test
+.vr-tmp

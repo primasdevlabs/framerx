@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+
 import { useExport } from '../hooks/useExport';
 import { useFramerDocument } from '../hooks/useFramerDocument';
 import { usePluginStore } from '../store/plugin-store';
@@ -10,29 +12,47 @@ import { OptionsForm } from './components/OptionsForm';
 import { ResultPanel } from './components/ResultPanel';
 
 export function App() {
-    useFramerDocument();
+    const { refreshDocument } = useFramerDocument();
 
     const mode = usePluginStore((state) => state.mode);
     const document = usePluginStore((state) => state.document);
     const summary = usePluginStore((state) => state.summary);
+    const isRefreshing = usePluginStore((state) => state.isRefreshing);
+    const status = usePluginStore((state) => state.status);
     const { canExport, exportProject, downloadAgain } = useExport();
+
+    // Refresh = rescan the Framer project, then re-export it with the fresh
+    // document (the export reads the current store state at call time).
+    const handleRefresh = useCallback(async () => {
+        const refreshed = await refreshDocument();
+        if (refreshed) await exportProject();
+    }, [refreshDocument, exportProject]);
 
     const ready = mode !== 'loading';
 
     return (
         <div className="plugin">
-            <Header mode={mode} />
+            <Header
+                mode={mode}
+                isRefreshing={isRefreshing}
+                refreshDisabled={status === 'compiling'}
+                onRefresh={() => void handleRefresh()}
+            />
 
             <main className="fx-body">
                 {!ready && <LoadingState />}
 
                 {ready && !document && <EmptyState />}
 
+                {/* Extraction/connection errors must be visible even when no
+                    document loaded — a silent empty state looks like the
+                    plugin failed to detect the project. */}
+                {ready && <ErrorBanner />}
+
                 {ready && document && (
                     <>
                         <DocumentCard document={document} />
                         <OptionsForm />
-                        <ErrorBanner />
                         {summary && <ResultPanel summary={summary} onDownloadAgain={downloadAgain} />}
                     </>
                 )}

@@ -13,14 +13,16 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "clean": "turbo run clean",
-    "demo": "pnpm build && tsx packages/compiler/scripts/compile-demo.ts"
+    "demo": "pnpm build && tsx packages/compiler/scripts/compile-demo.ts",
+    "visual:regression": "tsx packages/visual-regression/scripts/run-visual-regression.ts"
   },
   "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.0",
+    "puppeteer-core": "^25.5.0",
+    "tsx": "^4.19.0",
     "turbo": "^2.0.0",
     "typescript": "^5.5.0",
-    "prettier": "^3.3.0",
-    "eslint": "^8.57.0",
-    "tsx": "^4.19.0",
     "vitest": "^3.0.0"
   },
   "packageManager": "pnpm@9.0.0",

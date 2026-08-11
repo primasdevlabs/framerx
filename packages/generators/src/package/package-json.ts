@@ -6,8 +6,14 @@ import { DEFAULT_PROJECT_NAME, sanitizeFileName } from '@framer/compiler-shared'
 
 import type { VirtualFile } from '../types';
 
-/** Generate the package.json file for the generated project. */
-export function generatePackageJson(projectName: string): VirtualFile {
+/**
+ * Generate the package.json file for the generated project.
+ *
+ * `extraDependencies` are the bare imports collected from emitted code files
+ * (e.g. `framer-motion` when a code component imports it) — the generated
+ * project must declare every module its code references.
+ */
+export function generatePackageJson(projectName: string, extraDependencies: Record<string, string> = {}): VirtualFile {
     const name = sanitizeFileName(projectName || DEFAULT_PROJECT_NAME);
 
     const content = JSON.stringify(
@@ -27,6 +33,7 @@ export function generatePackageJson(projectName: string): VirtualFile {
                 react: '^19.0.0',
                 'react-dom': '^19.0.0',
                 motion: '^12.0.0',
+                ...extraDependencies,
             },
             devDependencies: {
                 '@types/react': '^19.0.0',

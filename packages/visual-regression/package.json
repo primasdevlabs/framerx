@@ -1,0 +1,27 @@
+{
+    "name": "@framer/visual-regression",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsc -b",
+        "dev": "tsc -b --watch",
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run",
+        "clean": "rm -rf dist"
+    },
+    "dependencies": {
+        "@framer/compiler": "workspace:*",
+        "@framer/compiler-parser": "workspace:*",
+        "@framer/compiler-shared": "workspace:*",
+        "puppeteer-core": "^25.0.0"
+    }
+}

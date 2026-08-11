@@ -7,10 +7,15 @@ import { DEFAULT_PROJECT_NAME, sanitizeComponentName } from '@framer/compiler-sh
 
 import type { VirtualFile } from '../types';
 
-/** Generate the main App.tsx file for the project. */
-export function generateApp(document: DesignDocument): VirtualFile {
+/**
+ * Generate the main App.tsx file for the project.
+ *
+ * `sectionNames` are the deduplicated output names assigned by
+ * generateProject; when omitted they derive from the root node names.
+ */
+export function generateApp(document: DesignDocument, sectionNames?: string[]): VirtualFile {
     const projectName = sanitizeComponentName(document.name || DEFAULT_PROJECT_NAME);
-    const sections = document.nodes.map((node) => sanitizeComponentName(node.name));
+    const sections = sectionNames ?? document.nodes.map((node) => sanitizeComponentName(node.name));
     const sectionImports = sections
         .map((sectionName) => `import { ${sectionName} } from './sections/${sectionName}';`)
         .join('\n');
@@ -33,11 +38,18 @@ ${sectionElements}
     };
 }
 
-/** Generate the main.tsx entry point file. */
-export function generateMainEntry(): VirtualFile {
+/**
+ * Generate the main.tsx entry point file.
+ *
+ * Responsive styles are imported AFTER the base stylesheet so generated media
+ * rules win at their tiers (later in the cascade, same specificity).
+ */
+export function generateMainEntry(includeResponsive = false, includeFonts = false): VirtualFile {
+    const responsiveImport = includeResponsive ? "\nimport './styles/responsive.css';" : '';
+    const fontImport = includeFonts ? "\nimport './styles/fonts.css';" : '';
     const content = `import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import './styles/index.css';
+import './styles/index.css';${fontImport}${responsiveImport}
 import App from './App';
 
 createRoot(document.getElementById('root')!).render(
@@ -95,8 +107,8 @@ export function generateViteEnv(): VirtualFile {
     };
 }
 
-/** Generate the index.html file. */
-export function generateIndexHtml(projectName: string): VirtualFile {
+/** Generate the index.html file without silently substituting external fonts. */
+export function generateIndexHtml(projectName: string, _fonts: string[] = []): VirtualFile {
     const title = projectName || DEFAULT_PROJECT_NAME;
 
     const content = `<!doctype html>

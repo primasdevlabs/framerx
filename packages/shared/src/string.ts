@@ -2,15 +2,33 @@
  * String manipulation utilities for code generation.
  */
 
-/** Convert a string to camelCase. */
+/**
+ * Convert a string to camelCase.
+ *
+ * Non-letter/non-number runs (spaces, punctuation, emoji) are stripped, and
+ * the character after each run is capitalized — INCLUDING a trailing run,
+ * which has no following character to consume it and must be removed
+ * explicitly (a name like `Content!` must never produce the identifier
+ * `content!`). Unicode letters are preserved (`étude` → `étude`).
+ */
 export function toCamelCase(input: string): string {
-    const cleaned = input.replace(/[^a-zA-Z0-9]+(.)/g, (_, char: string) => char.toUpperCase());
+    const cleaned = input
+        .replace(/[^\p{L}\p{N}]+(.)/gu, (_, char: string) => char.toUpperCase())
+        .replace(/[^\p{L}\p{N}]+$/gu, '');
     return cleaned.charAt(0).toLowerCase() + cleaned.slice(1);
 }
 
-/** Convert a string to PascalCase. */
+/**
+ * Convert a string to PascalCase.
+ *
+ * Same rules as toCamelCase, with the first character capitalized. Trailing
+ * non-letter/number characters are stripped so the result is always a valid
+ * identifier (e.g. `ThankYouForPurchase!` → `ThankYouForPurchase`).
+ */
 export function toPascalCase(input: string): string {
-    const cleaned = input.replace(/[^a-zA-Z0-9]+(.)/g, (_, char: string) => char.toUpperCase());
+    const cleaned = input
+        .replace(/[^\p{L}\p{N}]+(.)/gu, (_, char: string) => char.toUpperCase())
+        .replace(/[^\p{L}\p{N}]+$/gu, '');
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
