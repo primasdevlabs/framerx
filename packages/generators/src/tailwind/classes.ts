@@ -186,9 +186,10 @@ export function generateStyleClasses(node: DesignNode, tokens?: DesignTokens): s
 
     // Radius (a plain number is a uniform radius)
     if (style.radius && !styleProps.radius) {
-        const corners = typeof style.radius === 'number'
-            ? { topLeft: style.radius, topRight: style.radius, bottomRight: style.radius, bottomLeft: style.radius }
-            : style.radius;
+        const corners =
+            typeof style.radius === 'number'
+                ? { topLeft: style.radius, topRight: style.radius, bottomRight: style.radius, bottomLeft: style.radius }
+                : style.radius;
         const { topLeft, topRight, bottomRight, bottomLeft } = corners;
         if (topLeft === topRight && topRight === bottomRight && bottomRight === bottomLeft) {
             const suffix = radiusToTailwind(topLeft, tokens);
@@ -227,7 +228,10 @@ export function generateTypographyClasses(node: DesignNode, tokens?: DesignToken
     }
 
     if (typography.fontWeight !== undefined) {
-        const weight = typeof typography.fontWeight === 'number' ? typography.fontWeight : fontWeightToNumber(typography.fontWeight);
+        const weight =
+            typeof typography.fontWeight === 'number'
+                ? typography.fontWeight
+                : fontWeightToNumber(typography.fontWeight);
         if (weight !== 400) classes.push(`font-${weightToName(weight)}`);
     }
 
@@ -271,21 +275,30 @@ function propDrivenStyles(node: DesignNode): Record<string, boolean> {
 /** Map an alignItems value to a Tailwind class suffix. */
 function mapAlignItems(value: FlexLayout['alignItems']): string {
     switch (value) {
-        case 'flex-start': return 'start';
-        case 'flex-end': return 'end';
-        default: return value;
+        case 'flex-start':
+            return 'start';
+        case 'flex-end':
+            return 'end';
+        default:
+            return value;
     }
 }
 
 /** Map a justifyContent value to a Tailwind class suffix. */
 function mapJustifyContent(value: FlexLayout['justifyContent']): string {
     switch (value) {
-        case 'flex-start': return 'start';
-        case 'flex-end': return 'end';
-        case 'space-between': return 'between';
-        case 'space-around': return 'around';
-        case 'space-evenly': return 'evenly';
-        default: return value;
+        case 'flex-start':
+            return 'start';
+        case 'flex-end':
+            return 'end';
+        case 'space-between':
+            return 'between';
+        case 'space-around':
+            return 'around';
+        case 'space-evenly':
+            return 'evenly';
+        default:
+            return value;
     }
 }
 
@@ -410,27 +423,42 @@ function fontSizeToTailwind(size: number): string {
 /** Convert a font weight name to a number. */
 function fontWeightToNumber(weight: string): number {
     switch (weight) {
-        case 'normal': return 400;
-        case 'bold': return 700;
-        case 'lighter': return 300;
-        case 'bolder': return 800;
-        default: return 400;
+        case 'normal':
+            return 400;
+        case 'bold':
+            return 700;
+        case 'lighter':
+            return 300;
+        case 'bolder':
+            return 800;
+        default:
+            return 400;
     }
 }
 
 /** Convert a font weight number to a Tailwind weight name. */
 function weightToName(weight: number): string {
     switch (weight) {
-        case 100: return 'thin';
-        case 200: return 'extralight';
-        case 300: return 'light';
-        case 400: return 'normal';
-        case 500: return 'medium';
-        case 600: return 'semibold';
-        case 700: return 'bold';
-        case 800: return 'extrabold';
-        case 900: return 'black';
-        default: return 'normal';
+        case 100:
+            return 'thin';
+        case 200:
+            return 'extralight';
+        case 300:
+            return 'light';
+        case 400:
+            return 'normal';
+        case 500:
+            return 'medium';
+        case 600:
+            return 'semibold';
+        case 700:
+            return 'bold';
+        case 800:
+            return 'extrabold';
+        case 900:
+            return 'black';
+        default:
+            return 'normal';
     }
 }
 

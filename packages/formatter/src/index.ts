@@ -133,7 +133,10 @@ export async function formatFile(file: FormattableFile, options: FormatterOption
 }
 
 /** Format a list of files in parallel. */
-export async function formatFiles(files: FormattableFile[], options: FormatterOptions = {}): Promise<FormattableFile[]> {
+export async function formatFiles(
+    files: FormattableFile[],
+    options: FormatterOptions = {},
+): Promise<FormattableFile[]> {
     return Promise.all(files.map((file) => formatFile(file, options)));
 }
 

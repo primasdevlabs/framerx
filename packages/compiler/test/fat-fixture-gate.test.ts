@@ -28,7 +28,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { collectCoverage, SOURCE_PROPERTIES } from '../src/coverage';
+import { SOURCE_PROPERTIES } from '../src/coverage';
 import { compileFramerDocument } from '../src/index';
 import { fatFixtureDocument, parseFramerDocument } from '@framer/compiler-parser';
 
@@ -42,7 +42,9 @@ describe('fat fixture — CI gate', () => {
     });
 
     it('has zero properties marked unsupported', () => {
-        const unsupported = SOURCE_PROPERTIES.filter((p) => 'unsupported' in p && (p as { unsupported?: boolean }).unsupported === true);
+        const unsupported = SOURCE_PROPERTIES.filter(
+            (p) => 'unsupported' in p && (p as { unsupported?: boolean }).unsupported === true,
+        );
         expect(unsupported.map((p) => p.id).sort()).toEqual([...EXPECTED_UNSUPPORTED].sort());
     });
 
@@ -68,10 +70,7 @@ describe('fat fixture — CI gate', () => {
         const notEmitted = report.properties
             .filter((p) => p.discoveredCount > 0 && p.stage !== 'emitted')
             .map((p) => ({ id: p.id, stage: p.stage, sources: p.discoveredCount }));
-        expect(
-            notEmitted,
-            'every discovered property must reach the emitted stage end-to-end',
-        ).toEqual([]);
+        expect(notEmitted, 'every discovered property must reach the emitted stage end-to-end').toEqual([]);
         expect(report.summary.emitted).toBe(66);
     });
 

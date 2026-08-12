@@ -158,9 +158,30 @@ const stackSection: FramerNode = {
         sm: { layout: { direction: 'column' } },
     },
     children: [
-        { id: 'stk_a', type: 'Frame', name: 'A', frame: { x: 0, y: 0, width: 200, height: 80 }, layout: { strategy: 'auto' }, style: {} },
-        { id: 'stk_b', type: 'Frame', name: 'B', frame: { x: 0, y: 0, width: 200, height: 80 }, layout: { strategy: 'auto' }, style: {} },
-        { id: 'stk_c', type: 'Frame', name: 'C', frame: { x: 0, y: 0, width: 200, height: 80 }, layout: { strategy: 'auto' }, style: {} },
+        {
+            id: 'stk_a',
+            type: 'Frame',
+            name: 'A',
+            frame: { x: 0, y: 0, width: 200, height: 80 },
+            layout: { strategy: 'auto' },
+            style: {},
+        },
+        {
+            id: 'stk_b',
+            type: 'Frame',
+            name: 'B',
+            frame: { x: 0, y: 0, width: 200, height: 80 },
+            layout: { strategy: 'auto' },
+            style: {},
+        },
+        {
+            id: 'stk_c',
+            type: 'Frame',
+            name: 'C',
+            frame: { x: 0, y: 0, width: 200, height: 80 },
+            layout: { strategy: 'auto' },
+            style: {},
+        },
     ],
 };
 
@@ -185,9 +206,30 @@ const gridSection: FramerNode = {
     },
     style: { fills: [{ type: 'solid', color: '#ffffff', visible: true }] },
     children: [
-        { id: 'grid_1', type: 'Frame', name: '1', frame: { x: 0, y: 0, width: 220, height: 120 }, layout: { strategy: 'auto' }, style: {} },
-        { id: 'grid_2', type: 'Frame', name: '2', frame: { x: 0, y: 0, width: 220, height: 120 }, layout: { strategy: 'auto' }, style: {} },
-        { id: 'grid_3', type: 'Frame', name: '3', frame: { x: 0, y: 0, width: 220, height: 120 }, layout: { strategy: 'auto' }, style: {} },
+        {
+            id: 'grid_1',
+            type: 'Frame',
+            name: '1',
+            frame: { x: 0, y: 0, width: 220, height: 120 },
+            layout: { strategy: 'auto' },
+            style: {},
+        },
+        {
+            id: 'grid_2',
+            type: 'Frame',
+            name: '2',
+            frame: { x: 0, y: 0, width: 220, height: 120 },
+            layout: { strategy: 'auto' },
+            style: {},
+        },
+        {
+            id: 'grid_3',
+            type: 'Frame',
+            name: '3',
+            frame: { x: 0, y: 0, width: 220, height: 120 },
+            layout: { strategy: 'auto' },
+            style: {},
+        },
     ],
 };
 
@@ -330,17 +372,19 @@ const styleSection: FramerNode = {
             frame: { x: 0, y: 0, width: 220, height: 160 },
             layout: { strategy: 'auto' },
             style: {
-                fills: [{
-                    type: 'linear',
-                    gradient: {
-                        angle: 135,
-                        stops: [
-                            { position: 0, color: '#a855f7' },
-                            { position: 1, color: '#ec4899' },
-                        ],
+                fills: [
+                    {
+                        type: 'linear',
+                        gradient: {
+                            angle: 135,
+                            stops: [
+                                { position: 0, color: '#a855f7' },
+                                { position: 1, color: '#ec4899' },
+                            ],
+                        },
+                        visible: true,
                     },
-                    visible: true,
-                }],
+                ],
                 radius: 16,
             },
         },
@@ -558,18 +602,20 @@ const animationSection: FramerNode = {
             frame: { x: 0, y: 0, width: 200, height: 96 },
             layout: { strategy: 'auto' },
             style: { fills: [{ type: 'solid', color: '#fde68a', visible: true }], radius: 12 },
-            interactions: [{
-                type: 'animation',
-                trigger: 'hover',
-                name: 'Hover Scale',
-                animation: {
-                    type: 'spring',
-                    duration: 0.3,
-                    stiffness: 200,
-                    damping: 18,
-                    properties: { scale: 1.05 },
+            interactions: [
+                {
+                    type: 'animation',
+                    trigger: 'hover',
+                    name: 'Hover Scale',
+                    animation: {
+                        type: 'spring',
+                        duration: 0.3,
+                        stiffness: 200,
+                        damping: 18,
+                        properties: { scale: 1.05 },
+                    },
                 },
-            }],
+            ],
         },
         // Tap animation — whileTap
         {
@@ -579,18 +625,20 @@ const animationSection: FramerNode = {
             frame: { x: 0, y: 0, width: 200, height: 96 },
             layout: { strategy: 'auto' },
             style: { fills: [{ type: 'solid', color: '#bef264', visible: true }], radius: 12 },
-            interactions: [{
-                type: 'animation',
-                trigger: 'tap',
-                name: 'Tap Shrink',
-                animation: {
-                    type: 'spring',
-                    duration: 0.2,
-                    stiffness: 400,
-                    damping: 20,
-                    properties: { scale: 0.96 },
+            interactions: [
+                {
+                    type: 'animation',
+                    trigger: 'tap',
+                    name: 'Tap Shrink',
+                    animation: {
+                        type: 'spring',
+                        duration: 0.2,
+                        stiffness: 400,
+                        damping: 20,
+                        properties: { scale: 0.96 },
+                    },
                 },
-            }],
+            ],
         },
         // Mount animation — initial + animate
         {
@@ -600,18 +648,20 @@ const animationSection: FramerNode = {
             frame: { x: 0, y: 0, width: 200, height: 96 },
             layout: { strategy: 'auto' },
             style: { fills: [{ type: 'solid', color: '#a7f3d0', visible: true }], radius: 12 },
-            interactions: [{
-                type: 'animation',
-                trigger: 'animate',
-                name: 'Mount Fade In',
-                animation: {
-                    type: 'tween',
-                    duration: 0.6,
-                    ease: 'easeOut',
-                    initial: { opacity: 0, y: 16 },
-                    properties: { opacity: 1, y: 0 },
+            interactions: [
+                {
+                    type: 'animation',
+                    trigger: 'animate',
+                    name: 'Mount Fade In',
+                    animation: {
+                        type: 'tween',
+                        duration: 0.6,
+                        ease: 'easeOut',
+                        initial: { opacity: 0, y: 16 },
+                        properties: { opacity: 1, y: 0 },
+                    },
                 },
-            }],
+            ],
         },
         // Viewport animation — whileInView
         {
@@ -621,18 +671,20 @@ const animationSection: FramerNode = {
             frame: { x: 0, y: 0, width: 200, height: 96 },
             layout: { strategy: 'auto' },
             style: { fills: [{ type: 'solid', color: '#bae6fd', visible: true }], radius: 12 },
-            interactions: [{
-                type: 'animation',
-                trigger: 'whileInView',
-                name: 'Viewport Slide',
-                animation: {
-                    type: 'tween',
-                    duration: 0.8,
-                    ease: 'easeOut',
-                    properties: { opacity: 1, y: 0 },
-                    viewport: { amount: 0.6, once: true },
+            interactions: [
+                {
+                    type: 'animation',
+                    trigger: 'whileInView',
+                    name: 'Viewport Slide',
+                    animation: {
+                        type: 'tween',
+                        duration: 0.8,
+                        ease: 'easeOut',
+                        properties: { opacity: 1, y: 0 },
+                        viewport: { amount: 0.6, once: true },
+                    },
                 },
-            }],
+            ],
         },
         // Link interaction
         {
@@ -642,12 +694,14 @@ const animationSection: FramerNode = {
             frame: { x: 0, y: 0, width: 200, height: 96 },
             layout: { strategy: 'auto' },
             style: { fills: [{ type: 'solid', color: '#fbcfe8', visible: true }], radius: 12 },
-            interactions: [{
-                type: 'link',
-                trigger: 'click',
-                url: '/about',
-                newTab: false,
-            }],
+            interactions: [
+                {
+                    type: 'link',
+                    trigger: 'click',
+                    url: '/about',
+                    newTab: false,
+                },
+            ],
         },
     ],
 };
@@ -751,7 +805,13 @@ const replicaSection: FramerNode = {
     style: {},
     // The primary this replica derives from does not exist in the document
     // (an engine-internal id the extraction could not resolve).
-    source: { platform: 'framer', nodeId: 'replica_orphan', isReplica: true, originalId: 'ghost_primary', breakpointName: 'Tablet' },
+    source: {
+        platform: 'framer',
+        nodeId: 'replica_orphan',
+        isReplica: true,
+        originalId: 'ghost_primary',
+        breakpointName: 'Tablet',
+    },
     children: [],
 };
 

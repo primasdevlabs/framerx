@@ -9,13 +9,18 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FramerDocument, FramerNode } from '@framer/compiler-parser';
-import { findFile, generateProject } from '@framer/compiler-generators';
+import { findFile } from '@framer/compiler-generators';
 import { parseFramerDocument } from '@framer/compiler-parser';
 
 import { compileFramerDocument, separateComponents } from '../src/index';
 
 /** A Framer frame node. */
-function framerFrame(id: string, name: string, children: FramerNode[], style: Record<string, unknown> = {}): FramerNode {
+function framerFrame(
+    id: string,
+    name: string,
+    children: FramerNode[],
+    style: Record<string, unknown> = {},
+): FramerNode {
     return {
         id,
         type: 'Frame',
@@ -63,7 +68,12 @@ function framerSlot(id: string, name: string): FramerNode {
 }
 
 /** A Framer slot placeholder with default content and/or per-slot props. */
-function framerSlotWithDefault(id: string, name: string, children: FramerNode[], props?: Record<string, unknown>): FramerNode {
+function framerSlotWithDefault(
+    id: string,
+    name: string,
+    children: FramerNode[],
+    props?: Record<string, unknown>,
+): FramerNode {
     return {
         id,
         type: 'Slot',
@@ -77,7 +87,13 @@ function framerSlotWithDefault(id: string, name: string, children: FramerNode[],
 }
 
 /** A Framer component instance. */
-function framerComponent(id: string, componentId: string, name: string, master: FramerNode, extra: Partial<FramerNode['component']> = {}): FramerNode {
+function framerComponent(
+    id: string,
+    componentId: string,
+    name: string,
+    master: FramerNode,
+    extra: Partial<FramerNode['component']> = {},
+): FramerNode {
     return {
         id,
         type: 'Component',
@@ -108,18 +124,18 @@ function makeDocument(instances: FramerNode[]): FramerDocument {
         id: 'doc_masters',
         name: 'Masters Doc',
         version: '1.0.0',
-        nodes: [
-            framerFrame('root', 'Cards Section', instances),
-        ],
+        nodes: [framerFrame('root', 'Cards Section', instances)],
     };
 }
 
 describe('master-driven definitions', () => {
     it('shares ONE parsed master body object across all instances', () => {
-        const doc = parseFramerDocument(makeDocument([
-            framerComponent('card_1', 'comp_card', 'Card', cardMaster),
-            framerComponent('card_2', 'comp_card', 'Card', cardMaster),
-        ]));
+        const doc = parseFramerDocument(
+            makeDocument([
+                framerComponent('card_1', 'comp_card', 'Card', cardMaster),
+                framerComponent('card_2', 'comp_card', 'Card', cardMaster),
+            ]),
+        );
 
         const [a, b] = doc.nodes[0].children;
         expect(a.type).toBe('component');
@@ -134,9 +150,7 @@ describe('master-driven definitions', () => {
             framerText('b_title', 'Title', 'Badge'),
             framerSlotWithDefault('b_icon_slot', 'Icon', [framerText('b_icon_default', 'Icon', '★')], { size: 'md' }),
         ]);
-        const doc = parseFramerDocument(makeDocument([
-            framerComponent('badge_1', 'comp_badge', 'Badge', iconMaster),
-        ]));
+        const doc = parseFramerDocument(makeDocument([framerComponent('badge_1', 'comp_badge', 'Badge', iconMaster)]));
         const separated = separateComponents(doc);
 
         const definition = separated.components!.find((c) => c.name === 'Badge')!;
@@ -218,9 +232,7 @@ describe('master-driven definitions', () => {
     });
 
     it('parses the master as the instance template (the definition body)', () => {
-        const doc = parseFramerDocument(makeDocument([
-            framerComponent('card_1', 'comp_card', 'Card', cardMaster),
-        ]));
+        const doc = parseFramerDocument(makeDocument([framerComponent('card_1', 'comp_card', 'Card', cardMaster)]));
 
         const instance = doc.nodes[0].children[0];
         expect(instance.type).toBe('component');
@@ -235,10 +247,12 @@ describe('master-driven definitions', () => {
     });
 
     it('uses the master body — not the synthesized fallback — as the definition', () => {
-        const doc = parseFramerDocument(makeDocument([
-            framerComponent('card_1', 'comp_card', 'Card', cardMaster),
-            framerComponent('card_2', 'comp_card', 'Card', cardMaster, { props: { title: 'Two' } }),
-        ]));
+        const doc = parseFramerDocument(
+            makeDocument([
+                framerComponent('card_1', 'comp_card', 'Card', cardMaster),
+                framerComponent('card_2', 'comp_card', 'Card', cardMaster, { props: { title: 'Two' } }),
+            ]),
+        );
         const separated = separateComponents(doc);
 
         const definition = separated.components!.find((c) => c.name === 'Card')!;
@@ -317,9 +331,7 @@ describe('master-driven definitions', () => {
     });
 
     it('is deterministic across exports', async () => {
-        const doc = makeDocument([
-            framerComponent('card_1', 'comp_card', 'Card', cardMaster),
-        ]);
+        const doc = makeDocument([framerComponent('card_1', 'comp_card', 'Card', cardMaster)]);
         const a = await compileFramerDocument(doc, { projectName: 'masters' });
         const b = await compileFramerDocument(doc, { projectName: 'masters' });
 

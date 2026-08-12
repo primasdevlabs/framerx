@@ -20,7 +20,21 @@ export function collectAssets(nodes: FramerNode[]): Asset[] {
                 seen.add(src);
                 // Pass the full FramerImage object as meta — it now carries
                 // the pre-fetched binary `data` field written by the exporter.
-                assets.push(createAsset('image', src, node.image.name, node.image as { data?: Uint8Array; width?: number; height?: number; mimeType?: string; size?: number; alt?: string }));
+                assets.push(
+                    createAsset(
+                        'image',
+                        src,
+                        node.image.name,
+                        node.image as {
+                            data?: Uint8Array;
+                            width?: number;
+                            height?: number;
+                            mimeType?: string;
+                            size?: number;
+                            alt?: string;
+                        },
+                    ),
+                );
             }
         }
 
@@ -140,7 +154,12 @@ export function collectAssets(nodes: FramerNode[]): Asset[] {
 }
 
 /** Create an Asset from a source URL. */
-function createAsset(type: AssetType, src: string, name?: string, meta?: { width?: number; height?: number; mimeType?: string; size?: number; alt?: string; data?: Uint8Array }): Asset {
+function createAsset(
+    type: AssetType,
+    src: string,
+    name?: string,
+    meta?: { width?: number; height?: number; mimeType?: string; size?: number; alt?: string; data?: Uint8Array },
+): Asset {
     const extension = getExtension(src, type);
     // Deterministic file names: named assets keep their name, unnamed assets derive
     // a stable name from the source URL so output is reproducible across runs.

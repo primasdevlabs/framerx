@@ -22,7 +22,13 @@
  */
 
 import type { DesignDocument, DesignNode } from '@framer/compiler-ast';
-import { DEFAULT_RADIUS, DEFAULT_SPACING_SCALE, isZero, normalizeColor, pxToTailwindSpacing } from '@framer/compiler-shared';
+import {
+    DEFAULT_RADIUS,
+    DEFAULT_SPACING_SCALE,
+    isZero,
+    normalizeColor,
+    pxToTailwindSpacing,
+} from '@framer/compiler-shared';
 import type { VirtualFile } from '../types';
 
 import { matchPalette } from './palette';
@@ -146,7 +152,14 @@ export function walkEmittedTrees(document: DesignDocument, visitor: (node: Desig
 
 /** Collect the design tokens used by a compiled document. */
 export function extractTokens(document: DesignDocument): DesignTokens {
-    const tokens: DesignTokens = { colors: {}, radii: {}, spacing: {}, colorNames: {}, radiusValues: {}, spacingValues: {} };
+    const tokens: DesignTokens = {
+        colors: {},
+        radii: {},
+        spacing: {},
+        colorNames: {},
+        radiusValues: {},
+        spacingValues: {},
+    };
     const colorNames = new Map<string, string>();
     const radiusKeys = new Set<string>();
     const spacingKeys = new Set<string>();
@@ -240,9 +253,10 @@ export function extractTokens(document: DesignDocument): DesignTokens {
         // Radius (a plain number is a uniform radius)
         const radius = style.radius;
         if (radius && !sProps?.radius) {
-            const corners = typeof radius === 'number'
-                ? { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius }
-                : radius;
+            const corners =
+                typeof radius === 'number'
+                    ? { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius }
+                    : radius;
             const { topLeft, topRight, bottomRight, bottomLeft } = corners;
             if (topLeft === topRight && topRight === bottomRight && bottomRight === bottomLeft) {
                 addRadius(topLeft);

@@ -91,7 +91,12 @@ describe('optimizer', () => {
 
     it('keeps fixed-size empty containers (they occupy layout space)', () => {
         const parent = containerNode({
-            children: [containerNode({ id: 'sized', layout: { ...containerNode().layout, sizing: { widthMode: 'fixed', heightMode: 'fixed' } } })],
+            children: [
+                containerNode({
+                    id: 'sized',
+                    layout: { ...containerNode().layout, sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+                }),
+            ],
         });
         expect(optimizeNode(parent).children).toHaveLength(1);
     });
@@ -167,7 +172,7 @@ describe('generators', () => {
 
         const featureCard = findFile(project, 'src/components/FeatureCard.tsx');
         expect(featureCard!.content).not.toContain('from ./FeatureCard');
-        expect(featureCard!.content).not.toContain('from \'./FeatureCard\'');
+        expect(featureCard!.content).not.toContain("from './FeatureCard'");
 
         expect(findFile(project, 'src/vite-env.d.ts')).toBeDefined();
     });
@@ -234,7 +239,9 @@ describe('generators', () => {
         // not a literal hex string.
         const showcase = findFile(project, 'src/sections/AnimatedShowcase.tsx');
         expect(showcase).toBeDefined();
-        expect(showcase!.content).toContain('background: `linear-gradient(135deg, ${colors.indigo500} 0%, ${colors.violet500} 100%)`');
+        expect(showcase!.content).toContain(
+            'background: `linear-gradient(135deg, ${colors.indigo500} 0%, ${colors.violet500} 100%)`',
+        );
         expect(showcase!.content).not.toContain('bg-[#6366f1]');
         expect(showcase!.content).toContain("import { colors } from '../tokens';");
 
@@ -259,9 +266,11 @@ describe('generators', () => {
         // Prettier breaks the guarded ternary across lines; the `: undefined`
         // else-branch is what keeps the optional prop strict-tsc-safe.
         expect(card!.content).toContain('background: gradient');
-        expect(card!.content).toContain('? `linear-gradient(${gradient.angle ?? 0}deg, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})`');
+        expect(card!.content).toContain(
+            "? `linear-gradient(${gradient.angle ?? 0}deg, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(', ')})`",
+        );
         expect(card!.content).toContain(': undefined,');
-        expect(card!.content).not.toContain("import { colors }");
+        expect(card!.content).not.toContain('import { colors }');
 
         // Instances pass gradient object literals with token-referenced stops
         // (Prettier formats the object across lines).
@@ -309,7 +318,9 @@ describe('generators', () => {
 
         // Color/length props are typed from the tokens module.
         const card = findFile(project, 'src/components/StatCard.tsx');
-        expect(card!.content).toContain("import { type ColorValue, type RadiusValue, type SpacingValue } from '../tokens';");
+        expect(card!.content).toContain(
+            "import { type ColorValue, type RadiusValue, type SpacingValue } from '../tokens';",
+        );
         expect(card!.content).toContain('accent?: ColorValue;');
         expect(card!.content).toContain('radius?: RadiusValue;');
         expect(card!.content).toContain('width?: SpacingValue;');

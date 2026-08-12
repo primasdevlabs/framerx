@@ -10,6 +10,8 @@ import { Header } from './components/Header';
 import { EmptyState, LoadingState } from './components/LoadingState';
 import { OptionsForm } from './components/OptionsForm';
 import { ResultPanel } from './components/ResultPanel';
+import { RetryPanel } from './components/RetryPanel';
+import { extractionFailureReason, isRetryableExtractionFailure } from './retry';
 
 export function App() {
     const { refreshDocument } = useFramerDocument();
@@ -18,7 +20,14 @@ export function App() {
     const document = usePluginStore((state) => state.document);
     const summary = usePluginStore((state) => state.summary);
     const isRefreshing = usePluginStore((state) => state.isRefreshing);
+    const error = usePluginStore((state) => state.error);
     const status = usePluginStore((state) => state.status);
+
+    // A failed load (engine handshake never landed, or extraction degraded
+    // because the canvas root could not be read) gets a prominent retry action
+    // — rescanning reconnects, so the user never has to close and reopen.
+    const needsRetry = isRetryableExtractionFailure(document, mode);
+    const retryReason = extractionFailureReason(document, error);
     const { canExport, exportProject, downloadAgain } = useExport();
 
     // Refresh = rescan the Framer project, then re-export it with the fresh
@@ -42,14 +51,22 @@ export function App() {
             <main className="fx-body">
                 {!ready && <LoadingState />}
 
-                {ready && !document && <EmptyState />}
+                {/* A failed load gets a prominent retry action — the degraded
+                    empty document must NOT masquerade as a real 0-section
+                    document, and the handshake failure must not tell the user
+                    to close and reopen the plugin. */}
+                {ready && needsRetry && (
+                    <RetryPanel reason={retryReason} isRefreshing={isRefreshing} onRetry={() => void handleRefresh()} />
+                )}
+
+                {ready && !document && !needsRetry && <EmptyState />}
 
                 {/* Extraction/connection errors must be visible even when no
                     document loaded — a silent empty state looks like the
                     plugin failed to detect the project. */}
-                {ready && <ErrorBanner />}
+                {ready && !needsRetry && <ErrorBanner />}
 
-                {ready && document && (
+                {ready && document && !needsRetry && (
                     <>
                         <DocumentCard document={document} />
                         <OptionsForm />

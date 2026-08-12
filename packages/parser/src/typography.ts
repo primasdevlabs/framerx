@@ -22,7 +22,8 @@ export function parseTypography(typography?: FramerTypography): TypographyStyle 
     if (typography.letterSpacing !== undefined) result.letterSpacing = typography.letterSpacing;
     if (typography.color) result.color = normalizeColor(typography.color);
     if (typography.textAlign) result.textAlign = typography.textAlign as TypographyStyle['textAlign'];
-    if (typography.textDecoration) result.textDecoration = typography.textDecoration as TypographyStyle['textDecoration'];
+    if (typography.textDecoration)
+        result.textDecoration = typography.textDecoration as TypographyStyle['textDecoration'];
     if (typography.textTransform) result.textTransform = typography.textTransform as TypographyStyle['textTransform'];
     if (typography.verticalAlign) result.verticalAlign = typography.verticalAlign as TypographyStyle['verticalAlign'];
     if (typography.whiteSpace) result.whiteSpace = typography.whiteSpace as TypographyStyle['whiteSpace'];

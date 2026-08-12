@@ -8,7 +8,13 @@
  * fit-content, `fixed` → the frame's px value.
  */
 
-import type { FramerFill, FramerImageRef, FramerNode, FramerResponsiveOverride, FramerTypography } from '@framer/compiler-parser';
+import type {
+    FramerFill,
+    FramerImageRef,
+    FramerNode,
+    FramerResponsiveOverride,
+    FramerTypography,
+} from '@framer/compiler-parser';
 
 import type { CssDeclaration } from './types';
 
@@ -49,7 +55,10 @@ export function applyResponsiveOverride(
     const style = result.style!;
 
     if (override.layout) {
-        if (override.layout.direction) layout.direction = override.layout.direction as FramerNode['layout'] extends { direction?: infer D } ? D : never;
+        if (override.layout.direction)
+            layout.direction = override.layout.direction as FramerNode['layout'] extends { direction?: infer D }
+                ? D
+                : never;
         if (override.layout.alignItems) layout.alignItems = override.layout.alignItems;
         if (override.layout.justifyContent) layout.justifyContent = override.layout.justifyContent;
         if (override.layout.gap !== undefined) layout.gap = override.layout.gap;
@@ -106,6 +115,20 @@ export function nodeCssWithOverrides(
     declarations.push(...layoutDeclarations(effective.layout));
     declarations.push(...positionDeclarations(effective.layout));
     declarations.push(...visualDeclarations(effective.style));
+
+    // Standalone image nodes carry their object-fit exactly like the
+    // generated project's `object-<fit>` Tailwind class (default `cover`).
+    // Without it the <img> renders with the browser default (object-fit:
+    // fill) and the base tier disagrees with the generated page. The
+    // responsive image-swap section below still runs LAST, so a tier's
+    // object-fit/position re-assertion wins over this base declaration.
+    if (node.type === 'Image') {
+        declarations.push({ property: 'object-fit', value: node.image?.objectFit ?? 'cover' });
+        if (node.image?.objectPosition) {
+            declarations.push({ property: 'object-position', value: node.image.objectPosition });
+        }
+    }
+
     // Typography first, then responsive text-style overrides LAST so the
     // tier's fontSize/color/opacity wins over the base typography.
     if (node.type === 'Text') declarations.push(...typographyCss(node.text?.style));
@@ -121,7 +144,8 @@ export function nodeCssWithOverrides(
     if (effective.imageSrc !== undefined || effective.imageFit !== undefined || effective.imagePosition !== undefined) {
         if (node.type === 'Image') {
             if (effective.imageFit) declarations.push({ property: 'object-fit', value: effective.imageFit });
-            if (effective.imagePosition) declarations.push({ property: 'object-position', value: effective.imagePosition });
+            if (effective.imagePosition)
+                declarations.push({ property: 'object-position', value: effective.imagePosition });
         } else {
             declarations.push({
                 property: 'background-image',
@@ -379,9 +403,7 @@ function visualDeclarations(style: FramerNode['style']): CssDeclaration[] {
 }
 
 /** Responsive text-style overrides (fontSize/color/opacity at a tier). */
-function textStyleDeclarations(
-    textStyle: EffectiveNodeStyle['textStyle'],
-): CssDeclaration[] {
+function textStyleDeclarations(textStyle: EffectiveNodeStyle['textStyle']): CssDeclaration[] {
     const out: CssDeclaration[] = [];
     if (!textStyle) return out;
     if (textStyle.fontSize !== undefined) out.push({ property: 'font-size', value: px(textStyle.fontSize) });
@@ -399,8 +421,10 @@ export function typographyCss(typography?: FramerTypography): CssDeclaration[] {
         out.push({ property: 'font-family', value: `'${typography.fontFamily}', system-ui, sans-serif` });
     }
     if (typography.fontSize !== undefined) out.push({ property: 'font-size', value: px(typography.fontSize) });
-    if (typography.fontWeight !== undefined) out.push({ property: 'font-weight', value: String(typography.fontWeight) });
-    if (typography.lineHeight !== undefined) out.push({ property: 'line-height', value: String(typography.lineHeight) });
+    if (typography.fontWeight !== undefined)
+        out.push({ property: 'font-weight', value: String(typography.fontWeight) });
+    if (typography.lineHeight !== undefined)
+        out.push({ property: 'line-height', value: String(typography.lineHeight) });
     if (typography.letterSpacing !== undefined) {
         out.push({ property: 'letter-spacing', value: `${typography.letterSpacing}em` });
     }
@@ -447,9 +471,7 @@ function fillLayer(fill: FramerFill): string {
 }
 
 function gradientStops(stops: Array<{ position: number; color: string }>): string {
-    return stops
-        .map((s) => `${s.color} ${Math.round(s.position * 100)}%`)
-        .join(', ');
+    return stops.map((s) => `${s.color} ${Math.round(s.position * 100)}%`).join(', ');
 }
 
 function fillColor(fill: FramerFill): string | undefined {

@@ -55,8 +55,8 @@ export function buildFontRegistry(document: DesignDocument): FontRegistry {
             const key = source.data
                 ? `bytes:${sha256Hex(source.data)}`
                 : source.url
-                    ? `url:${source.url}`
-                    : `font:${font.family}:${font.weight}:${font.style}:${source.format}`;
+                  ? `url:${source.url}`
+                  : `font:${font.family}:${font.weight}:${font.style}:${source.format}`;
             const existing = seen.get(key);
             if (existing) {
                 faces.push({ ...existing, font, source, data: existing.data, remoteOnly: existing.remoteOnly });

@@ -93,8 +93,7 @@ export async function captureScreenshot(url: string, options: ScreenshotOptions)
             page.on('request', (request) => {
                 try {
                     const requestUrl = new URL(request.url());
-                    const allowed =
-                        requestUrl.protocol === 'data:' || requestUrl.host === allowedHost;
+                    const allowed = requestUrl.protocol === 'data:' || requestUrl.host === allowedHost;
                     if (allowed) {
                         request.continue();
                     } else {

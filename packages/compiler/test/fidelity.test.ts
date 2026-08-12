@@ -20,7 +20,12 @@ function textNode(id: string, name: string, text: string, style: Record<string, 
         id,
         name,
         frame: { x: 0, y: 0, width: 100, height: 30 },
-        layout: { style: { strategy: 'auto' }, position: { mode: 'static' }, sizing: { widthMode: 'auto', heightMode: 'auto' }, spacing: {} },
+        layout: {
+            style: { strategy: 'auto' },
+            position: { mode: 'static' },
+            sizing: { widthMode: 'auto', heightMode: 'auto' },
+            spacing: {},
+        },
         style: {},
         constraints: { horizontal: 'left', vertical: 'top' },
         children: [],
@@ -35,7 +40,12 @@ function frameNode(id: string, name: string, children: DesignNode[], style: Desi
         id,
         name,
         frame: { x: 0, y: 0, width: 100, height: 100 },
-        layout: { style: { strategy: 'auto' }, position: { mode: 'static' }, sizing: { widthMode: 'auto', heightMode: 'auto' }, spacing: {} },
+        layout: {
+            style: { strategy: 'auto' },
+            position: { mode: 'static' },
+            sizing: { widthMode: 'auto', heightMode: 'auto' },
+            spacing: {},
+        },
         style,
         constraints: { horizontal: 'left', vertical: 'top' },
         children,
@@ -75,7 +85,9 @@ describe('exact value fidelity', () => {
 
     it('keeps exact border widths (no rounding to whole pixels)', () => {
         const doc = makeDocument([
-            frameNode('root', 'Border Section', [], { strokes: [{ fill: { type: 'solid', color: '#94a3b8' }, width: 1.5, align: 'inside' }] }),
+            frameNode('root', 'Border Section', [], {
+                strokes: [{ fill: { type: 'solid', color: '#94a3b8' }, width: 1.5, align: 'inside' }],
+            }),
         ]);
         const project = generateProject(doc);
         const section = findFile(project, 'src/sections/BorderSection.tsx');
@@ -86,9 +98,7 @@ describe('exact value fidelity', () => {
 
     it('keeps fractional spacing precision in arbitrary values', () => {
         // 37.625px does not exist in the default scale → exact arbitrary value.
-        const doc = makeDocument([
-            frameNode('root', 'Size Section', [], { fills: [] }),
-        ]);
+        const doc = makeDocument([frameNode('root', 'Size Section', [], { fills: [] })]);
         // Override the root's width to a fractional value.
         doc.nodes[0].frame = { ...doc.nodes[0].frame, width: 37.625 };
         doc.nodes[0].layout.sizing = { widthMode: 'fixed', heightMode: 'auto' };
@@ -131,7 +141,12 @@ describe('component reconstruction', () => {
             id: 'instance',
             name: 'Badge',
             frame: { x: 0, y: 0, width: 60, height: 30 },
-            layout: { style: { strategy: 'auto' }, position: { mode: 'static' }, sizing: { widthMode: 'auto', heightMode: 'auto' }, spacing: {} },
+            layout: {
+                style: { strategy: 'auto' },
+                position: { mode: 'static' },
+                sizing: { widthMode: 'auto', heightMode: 'auto' },
+                spacing: {},
+            },
             style: {},
             constraints: { horizontal: 'left', vertical: 'top' },
             componentId: 'comp_badge',
@@ -280,5 +295,139 @@ describe('positioning fidelity', () => {
         const project = generateProject(doc);
         const section = findFile(project, 'src/sections/StackSection.tsx');
         expect(section!.content).not.toContain('absolute');
+    });
+});
+
+describe('leaf-root className merge', () => {
+    /** A minimal image node builder (leaf root). */
+    function imageNode(id: string, name: string): DesignNode {
+        return {
+            type: 'image',
+            id,
+            name,
+            frame: { x: 0, y: 0, width: 100, height: 80 },
+            layout: {
+                style: { strategy: 'auto' },
+                position: { mode: 'static' },
+                sizing: { widthMode: 'fixed', heightMode: 'fixed' },
+                spacing: {},
+            },
+            style: {},
+            constraints: { horizontal: 'left', vertical: 'top' },
+            asset: { src: 'assets/images/photo.png', name: 'photo' },
+            objectFit: 'cover',
+            children: [],
+        };
+    }
+
+    /** A minimal vector node builder (leaf root). */
+    function vectorNode(id: string, name: string): DesignNode {
+        return {
+            type: 'vector',
+            id,
+            name,
+            frame: { x: 0, y: 0, width: 24, height: 24 },
+            layout: {
+                style: { strategy: 'auto' },
+                position: { mode: 'static' },
+                sizing: { widthMode: 'fixed', heightMode: 'fixed' },
+                spacing: {},
+            },
+            style: {},
+            constraints: { horizontal: 'left', vertical: 'top' },
+            pathData: 'M0 0 L24 24',
+            children: [],
+        };
+    }
+
+    it('merges a consumer className into an image leaf root instead of dropping it', () => {
+        const project = generateProject(makeDocument([imageNode('img_root', 'Hero Image')]));
+        const section = findFile(project, 'src/sections/HeroImage.tsx');
+        expect(section).toBeDefined();
+
+        // The prop is destructured (previously skipped for leaf roots)…
+        expect(section!.content).toContain('export function HeroImage({ className }: HeroImageProps)');
+        // …and MERGED into the img's own classes (baked classes survive).
+        expect(section!.content).toMatch(
+            /<img[^>]*className=\{\`[^`]*object-cover\$\{className \? \` \$\{className\}\` : ''\}\`}/,
+        );
+        expect(section!.content).not.toContain('className="');
+    });
+
+    it('merges a consumer className into a text leaf root', () => {
+        const project = generateProject(
+            makeDocument([textNode('txt_root', 'Tagline', 'Hello world', { fontSize: 14 })]),
+        );
+        const section = findFile(project, 'src/sections/Tagline.tsx');
+        expect(section).toBeDefined();
+
+        expect(section!.content).toContain('export function Tagline({ className }: TaglineProps)');
+        expect(section!.content).toMatch(
+            /<p[^>]*className=\{\`[^`]*\$\{className \? \` \$\{className\}\` : ''\}\`}>Hello world<\/p>/,
+        );
+    });
+
+    it('merges a consumer className into a vector leaf root', () => {
+        const project = generateProject(makeDocument([vectorNode('vec_root', 'Icon')]));
+        const section = findFile(project, 'src/sections/Icon.tsx');
+        expect(section).toBeDefined();
+
+        expect(section!.content).toContain('export function Icon({ className }: IconProps)');
+        expect(section!.content).toMatch(/<svg[^>]*className=\{\`[^`]*\$\{className \? \` \$\{className\}\` : ''\}\`}/);
+    });
+
+    it('keeps nested (non-root) leaves static — no consumer prop merge inside containers', () => {
+        const project = generateProject(
+            makeDocument([frameNode('root', 'Gallery', [imageNode('nested_img', 'Thumb')])]),
+        );
+        const section = findFile(project, 'src/sections/Gallery.tsx');
+        expect(section).toBeDefined();
+
+        // The nested img keeps a static class string — there is no className
+        // prop on the section to merge into it.
+        expect(section!.content).toMatch(/<img[^>]*className="[^"]*object-cover"/);
+        // Only the section ROOT carries the consumer prop (a root with no
+        // baked classes passes it through directly).
+        expect(section!.content).toMatch(/<div className=\{\`|className=\{className\}>/);
+        expect((section!.content.match(/\$\{className \?/g) ?? []).length).toBe(0);
+    });
+
+    it('merges a consumer className into a container root (never replaces its layout classes)', () => {
+        // A flex frame with a solid fill produces real baked classes.
+        const hero = {
+            ...frameNode('root', 'Hero', [textNode('t', 'Label', 'Hi')]),
+            layout: {
+                style: { strategy: 'flex' },
+                position: { mode: 'static' },
+                sizing: { widthMode: 'fixed', heightMode: 'fixed' },
+                spacing: {},
+            },
+            style: { fills: [{ type: 'solid', color: '#f8fafc' }] },
+        };
+        const project = generateProject(makeDocument([hero]));
+        const section = findFile(project, 'src/sections/Hero.tsx');
+        expect(section).toBeDefined();
+
+        // The root div keeps its baked classes AND appends the consumer's —
+        // replacement would silently drop the layout classes.
+        expect(section!.content).toMatch(/className=\{\`[^`]*flex[^`]*\$\{className \? \` \$\{className\}\` : ''\}\`}/);
+        expect(section!.content).not.toContain('className={className ??');
+    });
+
+    it('passes a section-specific anchor className from App into every section', () => {
+        const project = generateProject(
+            makeDocument([frameNode('root', 'Hero', [textNode('t', 'Label', 'Hi')]), imageNode('img2', 'Hero Image')]),
+        );
+        const app = findFile(project, 'src/App.tsx');
+        expect(app).toBeDefined();
+
+        // Kebab-cased anchor classes, one per section, passed as className.
+        expect(app!.content).toContain('<Hero className="section-hero" />');
+        expect(app!.content).toContain('<HeroImage className="section-hero-image" />');
+        // The section components accept the prop and merge it into their roots.
+        const hero = findFile(project, 'src/sections/Hero.tsx');
+        expect(hero!.content).toContain('export function Hero({ className }: HeroProps)');
+        const heroImage = findFile(project, 'src/sections/HeroImage.tsx');
+        expect(heroImage!.content).toContain('export function HeroImage({ className }: HeroImageProps)');
     });
 });

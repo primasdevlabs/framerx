@@ -20,7 +20,13 @@
  * source behavior is preserved exactly.
  */
 
-import type { DesignDocument, DesignNode, FlexLayout, ResponsiveBehavior, ResponsiveOverride } from '@framer/compiler-ast';
+import type {
+    DesignDocument,
+    DesignNode,
+    FlexLayout,
+    ResponsiveBehavior,
+    ResponsiveOverride,
+} from '@framer/compiler-ast';
 import { sha256HexOfString } from '@framer/compiler-shared';
 
 import type { VirtualFile } from '../types';
@@ -54,7 +60,13 @@ function hasOnlyImageSwaps(behavior: ResponsiveBehavior): boolean {
     if (overrides.length === 0) return false;
     for (const override of overrides) {
         if (!override) return false;
-        if (override.layout || override.sizing || override.spacing || override.style || override.visible !== undefined) {
+        if (
+            override.layout ||
+            override.sizing ||
+            override.spacing ||
+            override.style ||
+            override.visible !== undefined
+        ) {
             return false;
         }
         if (!override.image) return false;
@@ -79,11 +91,13 @@ export function generateResponsiveCss(document: DesignDocument, assetPaths?: Rea
     const breakpoints = new Map(document.breakpoints.map((bp) => [bp.name, bp.minWidth]));
     const rules: RuleMap = new Map();
 
-    const add = (node: DesignNode, breakpointName: string, declarations: ResponsiveDeclaration[]): void => {
+    /** Resolve a breakpoint name to its min-width (undefined when unknown). */
+    const minWidthOf = (breakpointName: string): number | undefined => breakpoints.get(breakpointName);
+
+    const add = (node: DesignNode, minWidth: number, declarations: ResponsiveDeclaration[]): void => {
         if (declarations.length === 0) return;
         const selector = responsiveClassName(node);
         if (!selector) return;
-        const minWidth = breakpoints.get(breakpointName) ?? 0;
 
         let byTier = rules.get(selector);
         if (!byTier) {
@@ -98,16 +112,30 @@ export function generateResponsiveCss(document: DesignDocument, assetPaths?: Rea
         const behavior = node.layout.responsive;
         if (!behavior) return;
 
-        // Explicit per-breakpoint overrides.
+        // A frame whose image fill swaps per tier renders its BASE fill here
+        // (base tier, min-width 0) instead of inline — an inline style would
+        // beat the media-query swap (inline > class). The reference renderer
+        // already emits the base fill in its class rule, so both pages agree.
+        add(node, 0, baseImageFillDeclarations(node, assetPaths));
+
+        // Explicit per-breakpoint overrides. A tier whose breakpoint is not
+        // in the document scale cannot be placed — skip it. Falling back to 0
+        // would emit an UNCONDITIONAL rule that silently applies the override
+        // at every viewport. A real min-width-0 breakpoint still resolves (the
+        // map returns 0, not undefined) and keeps its base-tier rule.
         for (const [breakpointName, override] of Object.entries(behavior.breakpoints ?? {})) {
             if (!override) continue;
+            const minWidth = minWidthOf(breakpointName);
+            if (minWidth === undefined) continue;
             const declarations = responsiveDeclarations(node, override, assetPaths);
-            if (declarations.length > 0) add(node, breakpointName, declarations);
+            if (declarations.length > 0) add(node, minWidth, declarations);
         }
 
         // hideOn: hide the node at specific breakpoints.
         for (const breakpointName of behavior.hideOn ?? []) {
-            add(node, breakpointName, [{ property: 'display', value: 'none' }]);
+            const minWidth = minWidthOf(breakpointName);
+            if (minWidth === undefined) continue;
+            add(node, minWidth, [{ property: 'display', value: 'none' }]);
         }
     });
 
@@ -118,8 +146,43 @@ export function generateResponsiveCss(document: DesignDocument, assetPaths?: Rea
     };
 }
 
+/**
+ * The base-tier declarations for a frame whose image fill swaps per tier.
+ *
+ * Mirrors what renderStyleAttrs would emit inline (background-image / size /
+ * position), but as CSS so the tier's media-query swap can override it. Only
+ * frames with responsive image overrides need this — every other image fill
+ * stays inline. Standalone `<img>` nodes swap via `<picture>` and never emit
+ * a background at all.
+ */
+function baseImageFillDeclarations(
+    node: DesignNode,
+    assetPaths?: ReadonlyMap<string, string>,
+): ResponsiveDeclaration[] {
+    if (node.type === 'image') return [];
+    const behavior = node.layout.responsive;
+    const hasImageOverrides =
+        behavior?.breakpoints !== undefined &&
+        Object.values(behavior.breakpoints).some((override) => Boolean(override?.image));
+    if (!hasImageOverrides) return [];
+    const fill = node.style.fills?.[0];
+    if (!fill || fill.type !== 'image') return [];
+
+    const url = resolveResponsiveImageSrc(fill.image.src, assetPaths);
+    const declarations: ResponsiveDeclaration[] = [
+        { property: 'background-image', value: `url("${url}")` },
+        { property: 'background-size', value: imageSizeValue(fill.image.objectFit ?? 'cover') },
+        { property: 'background-position', value: fill.image.objectPosition ?? 'center' },
+    ];
+    return declarations;
+}
+
 /** Convert a responsive override into CSS declarations (exact values). */
-function responsiveDeclarations(node: DesignNode, override: ResponsiveOverride, assetPaths?: ReadonlyMap<string, string>): ResponsiveDeclaration[] {
+function responsiveDeclarations(
+    node: DesignNode,
+    override: ResponsiveOverride,
+    assetPaths?: ReadonlyMap<string, string>,
+): ResponsiveDeclaration[] {
     const declarations: ResponsiveDeclaration[] = [];
 
     // Sizing
@@ -129,20 +192,28 @@ function responsiveDeclarations(node: DesignNode, override: ResponsiveOverride, 
         else if (sizing.widthMode) declarations.push({ property: 'width', value: sizingValue(sizing.widthMode) });
         if (sizing.height !== undefined) declarations.push({ property: 'height', value: lengthValue(sizing.height) });
         else if (sizing.heightMode) declarations.push({ property: 'height', value: sizingValue(sizing.heightMode) });
-        if (sizing.minWidth !== undefined) declarations.push({ property: 'min-width', value: lengthValue(sizing.minWidth) });
-        if (sizing.maxWidth !== undefined) declarations.push({ property: 'max-width', value: lengthValue(sizing.maxWidth) });
-        if (sizing.minHeight !== undefined) declarations.push({ property: 'min-height', value: lengthValue(sizing.minHeight) });
-        if (sizing.maxHeight !== undefined) declarations.push({ property: 'max-height', value: lengthValue(sizing.maxHeight) });
-        if (sizing.aspectRatio !== undefined) declarations.push({ property: 'aspect-ratio', value: String(sizing.aspectRatio) });
+        if (sizing.minWidth !== undefined)
+            declarations.push({ property: 'min-width', value: lengthValue(sizing.minWidth) });
+        if (sizing.maxWidth !== undefined)
+            declarations.push({ property: 'max-width', value: lengthValue(sizing.maxWidth) });
+        if (sizing.minHeight !== undefined)
+            declarations.push({ property: 'min-height', value: lengthValue(sizing.minHeight) });
+        if (sizing.maxHeight !== undefined)
+            declarations.push({ property: 'max-height', value: lengthValue(sizing.maxHeight) });
+        if (sizing.aspectRatio !== undefined)
+            declarations.push({ property: 'aspect-ratio', value: String(sizing.aspectRatio) });
     }
 
     // Spacing (padding)
     const padding = override.spacing?.padding;
     if (padding) {
         if (padding.top !== undefined) declarations.push({ property: 'padding-top', value: lengthValue(padding.top) });
-        if (padding.right !== undefined) declarations.push({ property: 'padding-right', value: lengthValue(padding.right) });
-        if (padding.bottom !== undefined) declarations.push({ property: 'padding-bottom', value: lengthValue(padding.bottom) });
-        if (padding.left !== undefined) declarations.push({ property: 'padding-left', value: lengthValue(padding.left) });
+        if (padding.right !== undefined)
+            declarations.push({ property: 'padding-right', value: lengthValue(padding.right) });
+        if (padding.bottom !== undefined)
+            declarations.push({ property: 'padding-bottom', value: lengthValue(padding.bottom) });
+        if (padding.left !== undefined)
+            declarations.push({ property: 'padding-left', value: lengthValue(padding.left) });
     }
 
     // Layout (flex fields — the responsive model only overrides flex layout)
@@ -158,7 +229,8 @@ function responsiveDeclarations(node: DesignNode, override: ResponsiveOverride, 
     // Style (typography / visual)
     const style = override.style;
     if (style) {
-        if (style.fontSize !== undefined) declarations.push({ property: 'font-size', value: lengthValue(style.fontSize) });
+        if (style.fontSize !== undefined)
+            declarations.push({ property: 'font-size', value: lengthValue(style.fontSize) });
         if (style.color !== undefined) declarations.push({ property: 'color', value: style.color });
         if (style.opacity !== undefined) declarations.push({ property: 'opacity', value: String(style.opacity) });
     }
@@ -210,9 +282,12 @@ function responsiveDeclarations(node: DesignNode, override: ResponsiveOverride, 
 function resolveResponsiveImageSrc(src: string, assetPaths?: ReadonlyMap<string, string>): string {
     const resolved = assetPaths?.get(src);
     if (resolved) {
-        // responsive.css lives at src/styles/, so project-root asset paths
-        // resolve one level up, same as the src/components/ references.
-        if (resolved.startsWith('public/')) return `../../${resolved}`;
+        // Assets live under public/ and are referenced ABSOLUTELY
+        // (`/assets/images/x.png`) so the same URL works in dev (Vite serves
+        // public/ at the root) and in the production build (Vite copies it
+        // verbatim into dist/). A relative ../ reference from src/styles/ would
+        // resolve outside dist/ and 404 once built.
+        if (resolved.startsWith('public/')) return `/${resolved.slice('public/'.length)}`;
         if (resolved.startsWith('src/')) return `../${resolved.slice('src/'.length)}`;
         return resolved;
     }
@@ -281,7 +356,10 @@ function renderRules(rules: RuleMap): string {
         const tiers = [...byTier.keys()].sort((a, b) => a - b);
 
         for (const tier of tiers) {
-            const declarations = byTier.get(tier)!.map((d) => `    ${d.property}: ${d.value};`).join('\n');
+            const declarations = byTier
+                .get(tier)!
+                .map((d) => `    ${d.property}: ${d.value};`)
+                .join('\n');
             if (tier === 0) {
                 blocks.push(`.${selector} {\n${declarations}\n}`);
             } else {

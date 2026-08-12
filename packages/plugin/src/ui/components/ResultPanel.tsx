@@ -23,9 +23,10 @@ export function ResultPanel({ summary, onDownloadAgain }: ResultPanelProps) {
                 <div className="fx-diagnostics">
                     <p className="fx-diagnostics__counts">
                         {summary.diagnostics.nodes} nodes · {summary.diagnostics.components} components ·{' '}
-                        {summary.diagnostics.componentsFromMasters} master-backed · {summary.diagnostics.componentsFromCode} code ·{' '}
-                        {summary.diagnostics.componentsSynthesized} synthesized · {summary.diagnostics.instances} instances ·{' '}
-                        {summary.diagnostics.assetsDiscovered} assets discovered · {summary.diagnostics.uniqueAssets} unique assets
+                        {summary.diagnostics.componentsFromMasters} master-backed ·{' '}
+                        {summary.diagnostics.componentsFromCode} code · {summary.diagnostics.componentsSynthesized}{' '}
+                        synthesized · {summary.diagnostics.instances} instances · {summary.diagnostics.assetsDiscovered}{' '}
+                        assets discovered · {summary.diagnostics.uniqueAssets} unique assets
                     </p>
                     {summary.diagnostics.warnings.length > 0 && (
                         <ul className="fx-diagnostics__warnings">
@@ -48,8 +49,9 @@ export function ResultPanel({ summary, onDownloadAgain }: ResultPanelProps) {
                         {summary.sdkProbe.matching.masterUnmatched.length} unmatched
                     </summary>
                     <p className="fx-debug__hint">
-                        The exact componentIdentifier / insertURL / componentName keys the live engine exposed during this
-                        export. Instances that matched neither a master nor a code file are listed under "matching".
+                        The exact componentIdentifier / insertURL / componentName keys the live engine exposed during
+                        this export. Instances that matched neither a master nor a code file are listed under
+                        "matching".
                     </p>
                     <pre className="fx-debug__json">{JSON.stringify(summary.sdkProbe, null, 2)}</pre>
                     <button
@@ -71,9 +73,7 @@ export function ResultPanel({ summary, onDownloadAgain }: ResultPanelProps) {
             <div className="fx-tree" aria-label="Generated files">
                 {groups.map((group) => (
                     <div key={group.directory}>
-                        <div className="fx-tree__dir">
-                            {group.directory === '.' ? 'root' : group.directory}/
-                        </div>
+                        <div className="fx-tree__dir">{group.directory === '.' ? 'root' : group.directory}/</div>
                         {group.files.map((name) => (
                             <div key={name} className="fx-tree__file">
                                 {name}

@@ -13,7 +13,10 @@ import { mockFramerDocument, parseFramerDocument } from '@framer/compiler-parser
 import { compileFramerDocument } from '../src/index';
 
 /** Flatten a node tree into a list of { id, sourceId } pairs. */
-function collectIds(node: DesignNode, out: Array<{ id: string; sourceId: string | undefined }> = []): Array<{ id: string; sourceId: string | undefined }> {
+function collectIds(
+    node: DesignNode,
+    out: Array<{ id: string; sourceId: string | undefined }> = [],
+): Array<{ id: string; sourceId: string | undefined }> {
     out.push({ id: node.id, sourceId: node.metadata?.sourceId });
     for (const child of node.children) collectIds(child, out);
     return out;
@@ -39,7 +42,8 @@ describe('source identity', () => {
         const b = parseFramerDocument(mockFramerDocument);
 
         expect(a.nodes.map((node) => node.id)).toEqual(b.nodes.map((node) => node.id));
-        const idsOf = (doc: ReturnType<typeof parseFramerDocument>) => doc.nodes.flatMap((node) => collectIds(node)).map(({ id }) => id);
+        const idsOf = (doc: ReturnType<typeof parseFramerDocument>) =>
+            doc.nodes.flatMap((node) => collectIds(node)).map(({ id }) => id);
         expect(idsOf(a)).toEqual(idsOf(b));
     });
 

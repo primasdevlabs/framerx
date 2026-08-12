@@ -1,0 +1,18 @@
+# Dependencies and build output
+node_modules
+**/dist/**
+**/.turbo/**
+coverage
+
+# Test/CI artifacts
+**/.vr-*/
+**/demo-output
+packages/*/generated
+
+# Non-code files: the format check covers TypeScript sources only.
+*.json
+*.md
+*.yaml
+*.yml
+*.snap
+pnpm-lock.yaml

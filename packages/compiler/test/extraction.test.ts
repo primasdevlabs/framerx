@@ -136,12 +136,7 @@ describe('extractComponents', () => {
     });
 
     it('extracts exact duplicates (identical text still becomes props)', () => {
-        const doc = makeDocument(
-            sectionNode('s', [
-                cardNode('a', 'Same', 'Same'),
-                cardNode('b', 'Same', 'Same'),
-            ]),
-        );
+        const doc = makeDocument(sectionNode('s', [cardNode('a', 'Same', 'Same'), cardNode('b', 'Same', 'Same')]));
         const extracted = extractComponents(doc);
 
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
@@ -237,10 +232,7 @@ describe('extractComponents', () => {
 
     it('is deterministic across runs', () => {
         const doc = makeDocument(
-            sectionNode('s', [
-                cardNode('a', 'Card A', 'Body A'),
-                cardNode('b', 'Card B', 'Body B'),
-            ]),
+            sectionNode('s', [cardNode('a', 'Card A', 'Body A'), cardNode('b', 'Card B', 'Body B')]),
         );
         const first = extractComponents(doc);
         const second = extractComponents(doc);
@@ -281,10 +273,7 @@ describe('extractComponents', () => {
             props: { title: 'Compiler First', description: 'A true compiler pipeline.' },
             children: [],
         };
-        const doc = makeDocument(
-            sectionNode('s', [card('a', 'One'), card('b', 'Two')]),
-            sectionNode('t', [existing]),
-        );
+        const doc = makeDocument(sectionNode('s', [card('a', 'One'), card('b', 'Two')]), sectionNode('t', [existing]));
         const extracted = extractComponents(doc);
 
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
@@ -295,11 +284,13 @@ describe('extractComponents', () => {
 
     it('extracts a varying nested fill color as a prop (accent)', () => {
         const extracted = extractComponents(
-            makeDocument(sectionNode('s', [
-                cardNode('a', 'Card A', 'Body A', '#10b981'),
-                cardNode('b', 'Card B', 'Body B', '#3b82f6'),
-                cardNode('c', 'Card C', 'Body C', '#8b5cf6'),
-            ])),
+            makeDocument(
+                sectionNode('s', [
+                    cardNode('a', 'Card A', 'Body A', '#10b981'),
+                    cardNode('b', 'Card B', 'Body B', '#3b82f6'),
+                    cardNode('c', 'Card C', 'Body C', '#8b5cf6'),
+                ]),
+            ),
         );
 
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
@@ -322,7 +313,9 @@ describe('extractComponents', () => {
             ...cardNode(id, 'T', 'B'),
             style: { fills: [{ type: 'solid', color, visible: true }], radius: 12 },
         });
-        const extracted = extractComponents(makeDocument(sectionNode('s', [card('a', '#111827'), card('b', '#f8fafc')])));
+        const extracted = extractComponents(
+            makeDocument(sectionNode('s', [card('a', '#111827'), card('b', '#f8fafc')])),
+        );
 
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
         expect(components[0].props).toMatchObject({ backgroundColor: '#111827' });
@@ -341,7 +334,10 @@ describe('extractComponents', () => {
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
         expect(components[0].props).toMatchObject({ radius: 12, width: 380 });
         expect(components[1].props).toMatchObject({ radius: 24, width: 360 });
-        expect(components[0].template!.metadata?.custom?.styleProps).toMatchObject({ radius: 'radius', width: 'width' });
+        expect(components[0].template!.metadata?.custom?.styleProps).toMatchObject({
+            radius: 'radius',
+            width: 'width',
+        });
     });
 
     it('extracts filled vs outlined buttons into a component with a variant prop', () => {
@@ -376,15 +372,17 @@ describe('extractComponents', () => {
         const solid = cardNode('a', 'Card A', 'Body A');
         const gradient = cardNode('b', 'Card B', 'Body B');
         gradient.style = {
-            fills: [{
-                type: 'linear',
-                angle: 90,
-                stops: [
-                    { position: 0, color: '#111827' },
-                    { position: 1, color: '#eef2f7' },
-                ],
-                visible: true,
-            }],
+            fills: [
+                {
+                    type: 'linear',
+                    angle: 90,
+                    stops: [
+                        { position: 0, color: '#111827' },
+                        { position: 1, color: '#eef2f7' },
+                    ],
+                    visible: true,
+                },
+            ],
             radius: 12,
         };
 
@@ -403,15 +401,25 @@ describe('extractComponents', () => {
         // The solid member stays class-driven; the gradient member gets a
         // per-variant inline background with token-module stop references.
         expect(file.content).toContain('const variantBackgroundMap: Record<string, string>');
-        expect(file.content).toContain("'info-card2': `linear-gradient(90deg, ${colors.gray900} 0%, ${colors.color1} 100%)`");
+        expect(file.content).toContain(
+            "'info-card2': `linear-gradient(90deg, ${colors.gray900} 0%, ${colors.color1} 100%)`",
+        );
         expect(file.content).toContain("'info-card': 'bg-white'");
         expect(file.content).toContain("import { colors } from '../tokens';");
         expect(file.content).toContain('${variantBackgroundMap[variant] ?? undefined}');
     });
 
     it('deduplicates colliding variant values', () => {
-        const a = { ...cardNode('a', 'One', 'Body'), name: 'Same Name', style: { fills: [{ type: 'solid', color: '#111827', visible: true }] } };
-        const b = { ...cardNode('b', 'Two', 'Body'), name: 'Same Name', style: { strokes: [{ fill: { type: 'solid', color: '#94a3b8' }, width: 1, align: 'inside' }] } };
+        const a = {
+            ...cardNode('a', 'One', 'Body'),
+            name: 'Same Name',
+            style: { fills: [{ type: 'solid', color: '#111827', visible: true }] },
+        };
+        const b = {
+            ...cardNode('b', 'Two', 'Body'),
+            name: 'Same Name',
+            style: { strokes: [{ fill: { type: 'solid', color: '#94a3b8' }, width: 1, align: 'inside' }] },
+        };
         const extracted = extractComponents(makeDocument(sectionNode('s', [a, b])));
 
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
@@ -423,23 +431,24 @@ describe('extractComponents', () => {
         const card = (id: string, color1: string, color2: string): DesignNode => {
             const node = cardNode(id, 'T', 'B');
             node.style = {
-                fills: [{
-                    type: 'linear',
-                    angle: 135,
-                    stops: [
-                        { position: 0, color: color1 },
-                        { position: 1, color: color2 },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'linear',
+                        angle: 135,
+                        stops: [
+                            { position: 0, color: color1 },
+                            { position: 1, color: color2 },
+                        ],
+                        visible: true,
+                    },
+                ],
                 radius: 12,
             };
             return node;
         };
-        const extracted = extractComponents(makeDocument(sectionNode('s', [
-            card('a', '#6366f1', '#8b5cf6'),
-            card('b', '#10b981', '#0ea5e9'),
-        ])));
+        const extracted = extractComponents(
+            makeDocument(sectionNode('s', [card('a', '#6366f1', '#8b5cf6'), card('b', '#10b981', '#0ea5e9')])),
+        );
 
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
         expect(components).toHaveLength(2);
@@ -473,23 +482,24 @@ describe('extractComponents', () => {
             const bar = node.children[0];
             bar.name = 'Accent Gradient';
             bar.style = {
-                fills: [{
-                    type: 'linear',
-                    angle: 90,
-                    stops: [
-                        { position: 0, color: color1 },
-                        { position: 1, color: color2 },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'linear',
+                        angle: 90,
+                        stops: [
+                            { position: 0, color: color1 },
+                            { position: 1, color: color2 },
+                        ],
+                        visible: true,
+                    },
+                ],
                 radius: 9999,
             };
             return node;
         };
-        const extracted = extractComponents(makeDocument(sectionNode('s', [
-            card('a', '#6366f1', '#8b5cf6'),
-            card('b', '#10b981', '#0ea5e9'),
-        ])));
+        const extracted = extractComponents(
+            makeDocument(sectionNode('s', [card('a', '#6366f1', '#8b5cf6'), card('b', '#10b981', '#0ea5e9')])),
+        );
 
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
         expect(components).toHaveLength(2);
@@ -520,15 +530,17 @@ describe('extractComponents', () => {
         const card = (id: string): DesignNode => {
             const node = cardNode(id, 'T', 'B');
             node.style = {
-                fills: [{
-                    type: 'linear',
-                    angle: 135,
-                    stops: [
-                        { position: 0, color: '#6366f1' },
-                        { position: 1, color: '#8b5cf6' },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'linear',
+                        angle: 135,
+                        stops: [
+                            { position: 0, color: '#6366f1' },
+                            { position: 1, color: '#8b5cf6' },
+                        ],
+                        visible: true,
+                    },
+                ],
                 radius: 12,
             };
             return node;
@@ -544,10 +556,9 @@ describe('extractComponents', () => {
 
     it('does not turn constant style values into props', () => {
         const extracted = extractComponents(
-            makeDocument(sectionNode('s', [
-                cardNode('a', 'Same', 'Same', '#10b981'),
-                cardNode('b', 'Same', 'Same', '#10b981'),
-            ])),
+            makeDocument(
+                sectionNode('s', [cardNode('a', 'Same', 'Same', '#10b981'), cardNode('b', 'Same', 'Same', '#10b981')]),
+            ),
         );
 
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
@@ -570,11 +581,23 @@ describe('extractComponents', () => {
             style: {},
             constraints: { horizontal: 'left', vertical: 'top' },
             children: [
-                { type: 'slot', id: `${id}_slot`, name: 'content', slotName: 'content', frame: { x: 0, y: 0, width: 0, height: 0 }, layout: { style: { strategy: 'auto' } }, style: {}, constraints: { horizontal: 'left', vertical: 'top' }, children: [] },
+                {
+                    type: 'slot',
+                    id: `${id}_slot`,
+                    name: 'content',
+                    slotName: 'content',
+                    frame: { x: 0, y: 0, width: 0, height: 0 },
+                    layout: { style: { strategy: 'auto' } },
+                    style: {},
+                    constraints: { horizontal: 'left', vertical: 'top' },
+                    children: [],
+                },
                 { ...cardNode(`${id}_label`, text, 'Body').children[0], id: `${id}_label` },
             ],
         });
-        const extracted = extractComponents(makeDocument(sectionNode('s', [withSlot('a', 'One'), withSlot('b', 'Two')])));
+        const extracted = extractComponents(
+            makeDocument(sectionNode('s', [withSlot('a', 'One'), withSlot('b', 'Two')])),
+        );
         expect(extracted.nodes.flatMap((n) => collectNodesOfType(n))).toHaveLength(0);
     });
 });
@@ -584,7 +607,10 @@ describe('extraction pipeline', () => {
         const result = await compileFramerDocument(mockFramerDocument, { projectName: 'demo' });
 
         // One extracted component file, with prop interpolation.
-        const card = findFile({ name: 'Demo', files: result.files, nodes: result.nodes }, 'src/components/TestimonialCard.tsx');
+        const card = findFile(
+            { name: 'Demo', files: result.files, nodes: result.nodes },
+            'src/components/TestimonialCard.tsx',
+        );
         expect(card).toBeDefined();
         expect(card!.content).toContain('quote?: string;');
         expect(card!.content).toContain('author?: string;');
@@ -616,7 +642,10 @@ describe('extraction pipeline', () => {
     it('extracts style props (accent colors) as inline styles', async () => {
         const result = await compileFramerDocument(mockFramerDocument, { projectName: 'demo' });
 
-        const card = findFile({ name: 'Demo', files: result.files, nodes: result.nodes }, 'src/components/StatCard.tsx');
+        const card = findFile(
+            { name: 'Demo', files: result.files, nodes: result.nodes },
+            'src/components/StatCard.tsx',
+        );
         expect(card).toBeDefined();
         expect(card!.content).toContain('accent?: ColorValue;');
         expect(card!.content).toContain('style={{ backgroundColor: accent }}');
@@ -642,10 +671,10 @@ describe('extraction pipeline', () => {
         expect(button!.content).toContain("variant?: 'primary-button' | 'secondary-button';");
         expect(button!.content).toContain("variant = 'primary-button'");
         // Class record switches filled vs outlined.
-        expect(button!.content).toContain("const variantClassMap: Record<string, string>");
+        expect(button!.content).toContain('const variantClassMap: Record<string, string>');
         expect(button!.content).toContain("'primary-button': 'bg-indigo-500'");
         expect(button!.content).toContain("'secondary-button': 'border border-slate-400'");
-        expect(button!.content).toContain('${variantClassMap[variant] ?? \'\'}');
+        expect(button!.content).toContain("${variantClassMap[variant] ?? ''}");
         // Shared motion (hover) stays in the component.
         expect(button!.content).toContain('whileHover');
 
@@ -660,25 +689,22 @@ describe('extraction pipeline', () => {
         const card = (id: string, color1: string, color2: string): DesignNode => {
             const node = cardNode(id, 'T', 'B');
             node.style = {
-                fills: [{
-                    type: 'linear',
-                    angle: 135,
-                    stops: [
-                        { position: 0, color: color1 },
-                        { position: 1, color: color2 },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'linear',
+                        angle: 135,
+                        stops: [
+                            { position: 0, color: color1 },
+                            { position: 1, color: color2 },
+                        ],
+                        visible: true,
+                    },
+                ],
                 radius: 12,
             };
             return node;
         };
-        const doc = makeDocument(
-            sectionNode('s', [
-                card('a', '#6366f1', '#8b5cf6'),
-                card('b', '#10b981', '#0ea5e9'),
-            ]),
-        );
+        const doc = makeDocument(sectionNode('s', [card('a', '#6366f1', '#8b5cf6'), card('b', '#10b981', '#0ea5e9')]));
         const extracted = extractComponents(doc);
         const project = generateProject({
             version: '1.0.0',
@@ -696,15 +722,21 @@ describe('extraction pipeline', () => {
         expect(file).toBeDefined();
         expect(file.content).toContain("import { type GradientValue } from '../tokens';");
         expect(file.content).toContain('gradient?: GradientValue;');
-        expect(file.content).toContain('background: gradient ? `linear-gradient(${gradient.angle ?? 0}deg, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})` : undefined');
-        expect(file.content).not.toContain("import { colors }");
+        expect(file.content).toContain(
+            "background: gradient ? `linear-gradient(${gradient.angle ?? 0}deg, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(', ')})` : undefined",
+        );
+        expect(file.content).not.toContain('import { colors }');
 
         // Instances pass object literals whose stops are token-referenced
         // color/position pairs.
         const section = project.files.find((f) => f.path === 'src/sections/CardsSection.tsx')!;
         expect(section).toBeDefined();
-        expect(section!.content).toContain('gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.violet500, position: 1 }], angle: 135 }}');
-        expect(section!.content).toContain('gradient={{ stops: [{ color: colors.emerald500, position: 0 }, { color: colors.sky500, position: 1 }], angle: 135 }}');
+        expect(section!.content).toContain(
+            'gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.violet500, position: 1 }], angle: 135 }}',
+        );
+        expect(section!.content).toContain(
+            'gradient={{ stops: [{ color: colors.emerald500, position: 0 }, { color: colors.sky500, position: 1 }], angle: 135 }}',
+        );
         expect(section!.content).toContain("import { colors } from '../tokens';");
 
         // The tokens module exports the GradientValue type and names the stops.
@@ -717,26 +749,23 @@ describe('extraction pipeline', () => {
         const card = (id: string, cx: number, cy: number, color2: string): DesignNode => {
             const node = cardNode(id, 'T', 'B');
             node.style = {
-                fills: [{
-                    type: 'radial',
-                    center: { x: cx, y: cy },
-                    radius: 0.5,
-                    stops: [
-                        { position: 0, color: '#6366f1' },
-                        { position: 1, color: color2 },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'radial',
+                        center: { x: cx, y: cy },
+                        radius: 0.5,
+                        stops: [
+                            { position: 0, color: '#6366f1' },
+                            { position: 1, color: color2 },
+                        ],
+                        visible: true,
+                    },
+                ],
                 radius: 12,
             };
             return node;
         };
-        const doc = makeDocument(
-            sectionNode('s', [
-                card('a', 0.3, 0.7, '#8b5cf6'),
-                card('b', 0.6, 0.2, '#10b981'),
-            ]),
-        );
+        const doc = makeDocument(sectionNode('s', [card('a', 0.3, 0.7, '#8b5cf6'), card('b', 0.6, 0.2, '#10b981')]));
         const extracted = extractComponents(doc);
         const project = generateProject({
             version: '1.0.0',
@@ -751,31 +780,39 @@ describe('extraction pipeline', () => {
         // and stop positions.
         const file = project.files.find((f) => f.path === 'src/components/InfoCard.tsx')!;
         expect(file).toBeDefined();
-        expect(file.content).toContain('background: gradient ? `radial-gradient(circle at ${(gradient.center?.x ?? 0.5) * 100}% ${(gradient.center?.y ?? 0.5) * 100}%, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(\', \')})` : undefined');
+        expect(file.content).toContain(
+            "background: gradient ? `radial-gradient(circle at ${(gradient.center?.x ?? 0.5) * 100}% ${(gradient.center?.y ?? 0.5) * 100}%, ${gradient.stops.map((s) => `${s.color} ${Math.round(s.position * 1000) / 10}%`).join(', ')})` : undefined",
+        );
 
         // Instances pass centers and token-referenced stop color/position pairs.
         const section = project.files.find((f) => f.path === 'src/sections/CardsSection.tsx')!;
         expect(section).toBeDefined();
-        expect(section!.content).toContain('gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.violet500, position: 1 }], center: { x: 0.3, y: 0.7 } }}');
-        expect(section!.content).toContain('gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.emerald500, position: 1 }], center: { x: 0.6, y: 0.2 } }}');
+        expect(section!.content).toContain(
+            'gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.violet500, position: 1 }], center: { x: 0.3, y: 0.7 } }}',
+        );
+        expect(section!.content).toContain(
+            'gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.emerald500, position: 1 }], center: { x: 0.6, y: 0.2 } }}',
+        );
     });
 
     it('carries non-even stop positions for exact fidelity', () => {
         const card = (id: string, midColor: string): DesignNode => {
             const node = cardNode(id, 'T', 'B');
             node.style = {
-                fills: [{
-                    type: 'linear',
-                    angle: 135,
-                    stops: [
-                        { position: 0, color: '#6366f1' },
-                        // 0.125 is a common stop that whole-percent rounding
-                        // would corrupt (12.5% → 13%).
-                        { position: 0.125, color: midColor },
-                        { position: 1, color: '#8b5cf6' },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'linear',
+                        angle: 135,
+                        stops: [
+                            { position: 0, color: '#6366f1' },
+                            // 0.125 is a common stop that whole-percent rounding
+                            // would corrupt (12.5% → 13%).
+                            { position: 0.125, color: midColor },
+                            { position: 1, color: '#8b5cf6' },
+                        ],
+                        visible: true,
+                    },
+                ],
                 radius: 12,
             };
             return node;
@@ -803,7 +840,9 @@ describe('extraction pipeline', () => {
             breakpoints: [],
         });
         const section = project.files.find((f) => f.path === 'src/sections/CardsSection.tsx')!;
-        expect(section!.content).toContain('gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.emerald500, position: 0.125 }, { color: colors.violet500, position: 1 }], angle: 135 }}');
+        expect(section!.content).toContain(
+            'gradient={{ stops: [{ color: colors.indigo500, position: 0 }, { color: colors.emerald500, position: 0.125 }, { color: colors.violet500, position: 1 }], angle: 135 }}',
+        );
 
         // The component renders each stop at its own percentage with one
         // decimal of precision (12.5%, not 13%).
@@ -817,9 +856,7 @@ describe('extraction pipeline', () => {
             frame: { ...cardNode(id, 'T', 'B').frame, width },
             style: { fills: [{ type: 'solid', color: '#ffffff', visible: true }], radius },
         });
-        const doc = makeDocument(
-            sectionNode('s', [card('a', 12, 380), card('b', 24, 360)]),
-        );
+        const doc = makeDocument(sectionNode('s', [card('a', 12, 380), card('b', 24, 360)]));
         const extracted = extractComponents(doc);
         const project = generateProject({
             version: '1.0.0',

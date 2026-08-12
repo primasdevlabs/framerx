@@ -49,10 +49,7 @@ export function resolveBreakpoints(document: FramerDocument): ResolvedBreakpoint
 }
 
 /** Build the full HTML page for a document. */
-export function renderReferencePage(
-    document: FramerDocument,
-    options: ReferenceRenderOptions = {},
-): string {
+export function renderReferencePage(document: FramerDocument, options: ReferenceRenderOptions = {}): string {
     const breakpoints = options.breakpoints
         ? options.breakpoints
               .map((bp) => ({ name: bp.name, minWidth: bp.minWidth }))
@@ -73,9 +70,7 @@ export function renderReferencePage(
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet" />`
         : '';
 
-    const sections = document.nodes
-        .map((node, index) => renderNode(node, `fx-ref-${index}`, breakpoints))
-        .join('\n');
+    const sections = document.nodes.map((node, index) => renderNode(node, `fx-ref-${index}`, breakpoints)).join('\n');
 
     return `<!doctype html>
 <html lang="en">
@@ -112,12 +107,7 @@ function cssNodeOf(node: FramerNode): FramerNode {
 }
 
 /** Recursively emit base + responsive rules for a node and its descendants. */
-function collectRules(
-    node: FramerNode,
-    className: string,
-    breakpoints: ResolvedBreakpoint[],
-    rules: string[],
-): void {
+function collectRules(node: FramerNode, className: string, breakpoints: ResolvedBreakpoint[], rules: string[]): void {
     const selector = `.${className}`;
     const cssNode = cssNodeOf(node);
     rules.push(`${selector} {\n${formatDeclarations(nodeCssWithOverrides(cssNode, undefined))}\n}`);
@@ -152,11 +142,7 @@ function childrenOf(node: FramerNode): FramerNode[] {
 }
 
 /** Render a node and its descendants into an HTML string. */
-function renderNode(
-    node: FramerNode,
-    className: string,
-    breakpoints: ResolvedBreakpoint[],
-): string {
+function renderNode(node: FramerNode, className: string, breakpoints: ResolvedBreakpoint[]): string {
     switch (node.type) {
         case 'Text':
             return renderText(node, className);
@@ -172,11 +158,7 @@ function renderNode(
 }
 
 /** A generic container (Frame / Slot / unknown types). */
-function renderFrame(
-    node: FramerNode,
-    className: string,
-    breakpoints: ResolvedBreakpoint[],
-): string {
+function renderFrame(node: FramerNode, className: string, breakpoints: ResolvedBreakpoint[]): string {
     const children = (node.children ?? [])
         .map((child, index) => renderNode(child, `${className}-c${index}`, breakpoints))
         .join('\n');
@@ -211,19 +193,31 @@ function renderImage(node: FramerNode, className: string, breakpoints: ResolvedB
     // Responsive image swaps: one <source media> per tier that carries an
     // alternate image — mirroring the generated project's <picture> element
     // (object-fit stays honored because the <img> keeps its box and class).
+    // Sources are emitted DESCENDING by min-width: browsers select the FIRST
+    // matching <source> in tree order, so the largest breakpoint must come
+    // first or a lower tier would shadow the higher one.
     const tiers = node.responsive
         ? Object.entries(node.responsive)
               .filter(([, override]) => override?.image?.src)
               .map(([breakpointName, override]) => ({
-                  minWidth: breakpoints.find((b) => b.name === breakpointName)?.minWidth ?? 0,
+                  minWidth: breakpoints.find((b) => b.name === breakpointName)?.minWidth,
                   src: override!.image!.src,
               }))
-              .sort((a, b) => a.minWidth - b.minWidth)
+              // A tier whose breakpoint is not in the document scale cannot be
+              // placed — skip it (same rule as collectRules below).
+              // `(min-width: 0px)` would match every viewport and, as the last
+              // source in tree order, shadow the <img> fallback everywhere. A
+              // real min-width-0 breakpoint still resolves (0, not undefined).
+              .filter((tier): tier is { minWidth: number; src: string } => tier.minWidth !== undefined)
+              .sort((a, b) => b.minWidth - a.minWidth)
         : [];
     if (tiers.length === 0) return img;
 
     const sources = tiers
-        .map(({ minWidth, src: tierSrc }) => `    <source media="(min-width: ${minWidth}px)" srcset="${escapeAttr(tierSrc)}" />`)
+        .map(
+            ({ minWidth, src: tierSrc }) =>
+                `    <source media="(min-width: ${minWidth}px)" srcset="${escapeAttr(tierSrc)}" />`,
+        )
         .join('\n');
     return `<picture>\n${sources}\n${indent(img)}\n</picture>`;
 }
@@ -243,11 +237,7 @@ function renderVector(node: FramerNode, className: string): string {
  * neutral placeholder — their pixels come from arbitrary code, which a
  * source renderer cannot reproduce; the diff for those regions is expected.
  */
-function renderComponent(
-    node: FramerNode,
-    className: string,
-    breakpoints: ResolvedBreakpoint[],
-): string {
+function renderComponent(node: FramerNode, className: string, breakpoints: ResolvedBreakpoint[]): string {
     const master = node.component?.master;
     if (master) {
         const body = (master.children ?? [])
@@ -274,10 +264,7 @@ function indent(text: string): string {
 }
 
 function escapeHtml(value: string): string {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function escapeAttr(value: string): string {

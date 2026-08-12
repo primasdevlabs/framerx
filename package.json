@@ -10,6 +10,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
+    "format:check": "turbo run format:check",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "clean": "turbo run clean",
@@ -17,6 +18,8 @@
     "visual:regression": "tsx packages/visual-regression/scripts/run-visual-regression.ts"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8",
+    "@typescript-eslint/parser": "^8",
     "eslint": "^8.57.0",
     "prettier": "^3.3.0",
     "puppeteer-core": "^25.5.0",

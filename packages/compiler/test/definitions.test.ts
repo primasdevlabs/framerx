@@ -23,7 +23,12 @@ function frameNode(id: string, name: string, children: DesignNode[], style: Desi
         id,
         name,
         frame: { x: 0, y: 0, width: 100, height: 100 },
-        layout: { style: { strategy: 'flex' }, position: { mode: 'static' }, sizing: { widthMode: 'fixed', heightMode: 'fixed' }, spacing: {} },
+        layout: {
+            style: { strategy: 'flex' },
+            position: { mode: 'static' },
+            sizing: { widthMode: 'fixed', heightMode: 'fixed' },
+            spacing: {},
+        },
         style,
         constraints: { horizontal: 'left', vertical: 'top' },
         children,
@@ -37,7 +42,12 @@ function textNode(id: string, name: string, text: string): DesignNode {
         id,
         name,
         frame: { x: 0, y: 0, width: 100, height: 30 },
-        layout: { style: { strategy: 'auto' }, position: { mode: 'static' }, sizing: { widthMode: 'auto', heightMode: 'auto' }, spacing: {} },
+        layout: {
+            style: { strategy: 'auto' },
+            position: { mode: 'static' },
+            sizing: { widthMode: 'auto', heightMode: 'auto' },
+            spacing: {},
+        },
         style: {},
         constraints: { horizontal: 'left', vertical: 'top' },
         children: [],
@@ -46,13 +56,25 @@ function textNode(id: string, name: string, text: string): DesignNode {
 }
 
 /** A minimal component instance builder. */
-function instanceNode(id: string, name: string, componentId: string, props: Record<string, unknown>, children: DesignNode[] = [], slots?: Record<string, DesignNode[]>): DesignComponentNode {
+function instanceNode(
+    id: string,
+    name: string,
+    componentId: string,
+    props: Record<string, unknown>,
+    children: DesignNode[] = [],
+    slots?: Record<string, DesignNode[]>,
+): DesignComponentNode {
     return {
         type: 'component',
         id,
         name,
         frame: { x: 0, y: 0, width: 60, height: 60 },
-        layout: { style: { strategy: 'auto' }, position: { mode: 'static' }, sizing: { widthMode: 'auto', heightMode: 'auto' }, spacing: {} },
+        layout: {
+            style: { strategy: 'auto' },
+            position: { mode: 'static' },
+            sizing: { widthMode: 'auto', heightMode: 'auto' },
+            spacing: {},
+        },
         style: {},
         constraints: { horizontal: 'left', vertical: 'top' },
         componentId,
@@ -124,8 +146,12 @@ describe('one implementation per definition', () => {
 
         // Both instances are references with their own prop values.
         const section = result.files.find((f) => f.path === 'src/sections/FeaturesSection.tsx')!;
-        expect(section.content).toContain('<FeatureCard title="Compiler First" description="A true compiler pipeline, not a simple exporter." />');
-        expect(section.content).toContain('<FeatureCard title="Platform Agnostic" description="The core compiler never depends on Framer APIs." />');
+        expect(section.content).toContain(
+            '<FeatureCard title="Compiler First" description="A true compiler pipeline, not a simple exporter." />',
+        );
+        expect(section.content).toContain(
+            '<FeatureCard title="Platform Agnostic" description="The core compiler never depends on Framer APIs." />',
+        );
         expect((section.content.match(/<FeatureCard/g) ?? []).length).toBe(2);
         // The card body exists exactly once — in the component file.
         expect(section.content).not.toContain('{title}');
@@ -145,7 +171,9 @@ describe('slot content', () => {
     it('passes instance children through the default slot', () => {
         const doc = makeDocument([
             frameNode('root', 'Badge Section', [
-                instanceNode('instance', 'Badge', 'comp_badge', { label: 'New' }, [textNode('child_label', 'Label', 'Custom child')]),
+                instanceNode('instance', 'Badge', 'comp_badge', { label: 'New' }, [
+                    textNode('child_label', 'Label', 'Custom child'),
+                ]),
             ]),
         ]);
         const project = generateProject(doc);

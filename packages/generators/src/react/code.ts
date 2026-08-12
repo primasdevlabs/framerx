@@ -164,7 +164,10 @@ export function stripFramerRuntime(source: string): string {
         pattern.lastIndex = end;
     }
     chunks.push(out.slice(cursor));
-    const cleaned = chunks.join('').replace(/\n{3,}/g, '\n\n').trim();
+    const cleaned = chunks
+        .join('')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
     return `${cleaned}\n`;
 }
 

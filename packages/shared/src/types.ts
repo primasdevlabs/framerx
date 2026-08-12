@@ -26,7 +26,7 @@ export interface EdgeInsets {
 }
 
 /** A rectangular region. */
-export interface Rect extends Point, Size { }
+export interface Rect extends Point, Size {}
 
 /** A border radius definition. */
 export interface CornerRadius {
@@ -89,10 +89,7 @@ export interface ImageFillRef {
 
 /** A fill definition. */
 export type Fill =
-    | { type: 'solid'; color: ColorValue }
-    | LinearGradient
-    | RadialGradient
-    | { type: 'image'; image: ImageFillRef };
+    { type: 'solid'; color: ColorValue } | LinearGradient | RadialGradient | { type: 'image'; image: ImageFillRef };
 
 /** A stroke definition. */
 export interface Stroke {

@@ -32,7 +32,9 @@ export function countNodes(nodes: Array<{ children?: unknown[] }>): number {
 }
 
 /** Count image-bearing nodes in a document tree. */
-export function countImages(nodes: Array<{ type?: string; image?: { src?: string } | null; children?: unknown[] }>): number {
+export function countImages(
+    nodes: Array<{ type?: string; image?: { src?: string } | null; children?: unknown[] }>,
+): number {
     let count = 0;
     const visit = (nodeList: typeof nodes): void => {
         for (const node of nodeList) {
@@ -47,7 +49,9 @@ export function countImages(nodes: Array<{ type?: string; image?: { src?: string
 }
 
 /** Collect the unique font families used in a document tree. */
-export function uniqueFontFamilies(nodes: Array<{ type?: string; text?: { style?: { fontFamily?: string } } | null; children?: unknown[] }>): string[] {
+export function uniqueFontFamilies(
+    nodes: Array<{ type?: string; text?: { style?: { fontFamily?: string } } | null; children?: unknown[] }>,
+): string[] {
     const families = new Set<string>();
     const visit = (nodeList: typeof nodes): void => {
         for (const node of nodeList) {

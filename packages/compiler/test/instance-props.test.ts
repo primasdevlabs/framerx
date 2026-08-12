@@ -39,7 +39,10 @@ function makeFixture(): FramerDocument {
                 frame: { x: 0, y: 0, width: 120, height: 24 },
                 layout: { strategy: 'auto' },
                 style: {},
-                text: { text: 'Badge', style: { fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#ffffff' } },
+                text: {
+                    text: 'Badge',
+                    style: { fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#ffffff' },
+                },
                 children: [],
             },
         ],

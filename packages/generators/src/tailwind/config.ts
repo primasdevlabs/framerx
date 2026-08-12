@@ -15,7 +15,10 @@ import type { VirtualFile } from '../types';
 import { extractTokens, walkEmittedTrees, type DesignTokens } from './tokens';
 
 /** Generate the tailwind.config.ts file. */
-export function generateTailwindConfig(document: DesignDocument, tokens: DesignTokens = extractTokens(document)): VirtualFile {
+export function generateTailwindConfig(
+    document: DesignDocument,
+    tokens: DesignTokens = extractTokens(document),
+): VirtualFile {
     const fontFamilies = extractFontFamilies(document);
 
     const content = `import type { Config } from 'tailwindcss';

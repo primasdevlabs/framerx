@@ -7,7 +7,16 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DesignComponentNode, DesignDocument, DesignNode } from '@framer/compiler-ast';
-import { extractTokens, findFile, generateClasses, generateComponent, generateProject, generateTokensModule, matchPalette, type DesignTokens } from '@framer/compiler-generators';
+import {
+    extractTokens,
+    findFile,
+    generateClasses,
+    generateComponent,
+    generateProject,
+    generateTokensModule,
+    matchPalette,
+    type DesignTokens,
+} from '@framer/compiler-generators';
 
 /** A minimal styled frame (non-palette fill, radius 20, 60px padding, 380×240). */
 function baseNode(id: string, overrides: Partial<DesignNode> = {}): DesignNode {
@@ -17,7 +26,13 @@ function baseNode(id: string, overrides: Partial<DesignNode> = {}): DesignNode {
         name: 'Node',
         frame: { x: 0, y: 0, width: 380, height: 240 },
         layout: {
-            style: { strategy: 'flex', direction: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', gap: 16 },
+            style: {
+                strategy: 'flex',
+                direction: 'column',
+                alignItems: 'flex-start',
+                justifyContent: 'flex-start',
+                gap: 16,
+            },
             position: { mode: 'static' },
             sizing: { widthMode: 'fixed', heightMode: 'fixed' },
             spacing: { padding: { top: 60, right: 60, bottom: 60, left: 60 } },
@@ -88,15 +103,17 @@ describe('extractTokens', () => {
     it('names gradient stop colors without creating theme tokens', () => {
         const node = baseNode('grad', {
             style: {
-                fills: [{
-                    type: 'linear',
-                    angle: 135,
-                    stops: [
-                        { position: 0, color: '#6366f1' },
-                        { position: 1, color: '#eef2f7' },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'linear',
+                        angle: 135,
+                        stops: [
+                            { position: 0, color: '#6366f1' },
+                            { position: 1, color: '#eef2f7' },
+                        ],
+                        visible: true,
+                    },
+                ],
             },
         });
         const tokens = extractTokens(makeDoc(node));
@@ -113,38 +130,44 @@ describe('extractTokens', () => {
         const node = baseNode('radial', {
             name: 'Radial Hero',
             style: {
-                fills: [{
-                    type: 'radial',
-                    center: { x: 0.5, y: 0.5 },
-                    radius: 0.5,
-                    stops: [
-                        { position: 0, color: '#6366f1' },
-                        { position: 1, color: '#0f172a' },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'radial',
+                        center: { x: 0.5, y: 0.5 },
+                        radius: 0.5,
+                        stops: [
+                            { position: 0, color: '#6366f1' },
+                            { position: 1, color: '#0f172a' },
+                        ],
+                        visible: true,
+                    },
+                ],
             },
         });
         const project = generateProject(makeDoc(node));
 
         const section = findFile(project, 'src/sections/RadialHero.tsx');
         expect(section).toBeDefined();
-        expect(section!.content).toContain('background: `radial-gradient(circle at 50% 50%, ${colors.indigo500} 0%, ${colors.slate900} 100%)`');
+        expect(section!.content).toContain(
+            'background: `radial-gradient(circle at 50% 50%, ${colors.indigo500} 0%, ${colors.slate900} 100%)`',
+        );
         expect(section!.content).toContain("import { colors } from '../tokens';");
     });
 
     it('falls back to literal CSS colors when no tokens are available', () => {
         const node = baseNode('grad', {
             style: {
-                fills: [{
-                    type: 'linear',
-                    angle: 135,
-                    stops: [
-                        { position: 0, color: '#6366f1' },
-                        { position: 1, color: '#eef2f7' },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'linear',
+                        angle: 135,
+                        stops: [
+                            { position: 0, color: '#6366f1' },
+                            { position: 1, color: '#eef2f7' },
+                        ],
+                        visible: true,
+                    },
+                ],
             },
         });
         const file = generateComponent(node);
@@ -165,8 +188,22 @@ describe('extractTokens', () => {
                         default: 'primary-button',
                         values: ['primary-button', 'secondary-button'],
                         members: [
-                            { ...baseNode('m1', { style: { fills: [{ type: 'solid', color: '#5865f2', visible: true }] } }), children: [] },
-                            { ...baseNode('m2', { style: { strokes: [{ fill: { type: 'solid', color: '#eef2f7' }, width: 1, align: 'inside' }] } }), children: [] },
+                            {
+                                ...baseNode('m1', {
+                                    style: { fills: [{ type: 'solid', color: '#5865f2', visible: true }] },
+                                }),
+                                children: [],
+                            },
+                            {
+                                ...baseNode('m2', {
+                                    style: {
+                                        strokes: [
+                                            { fill: { type: 'solid', color: '#eef2f7' }, width: 1, align: 'inside' },
+                                        ],
+                                    },
+                                }),
+                                children: [],
+                            },
                         ],
                     },
                 },
@@ -221,15 +258,17 @@ describe('extractTokens', () => {
     it('names gradient prop stop colors from instance props', () => {
         const template = baseNode('tpl', {
             style: {
-                fills: [{
-                    type: 'linear',
-                    angle: 135,
-                    stops: [
-                        { position: 0, color: '#6366f1' },
-                        { position: 1, color: '#8b5cf6' },
-                    ],
-                    visible: true,
-                }],
+                fills: [
+                    {
+                        type: 'linear',
+                        angle: 135,
+                        stops: [
+                            { position: 0, color: '#6366f1' },
+                            { position: 1, color: '#8b5cf6' },
+                        ],
+                        visible: true,
+                    },
+                ],
             },
             metadata: { custom: { styleProps: { gradient: 'gradient' } } },
         });
@@ -351,10 +390,11 @@ describe('tokens module interop', () => {
         // A component with its own color prop that also renders a nested
         // instance with a color prop: the file needs both import parts, and
         // the nested component file must be generated too.
-        const accentBar = (id: string, styleProps: Record<string, string>): DesignNode => baseNode(id, {
-            style: { fills: [{ type: 'solid', color: '#10b981', visible: true }] },
-            metadata: { custom: { styleProps } },
-        });
+        const accentBar = (id: string, styleProps: Record<string, string>): DesignNode =>
+            baseNode(id, {
+                style: { fills: [{ type: 'solid', color: '#10b981', visible: true }] },
+                metadata: { custom: { styleProps } },
+            });
 
         const templateB = baseNode('tplB', { children: [accentBar('tint_bar', { backgroundColor: 'tint' })] });
         const instanceB = {
@@ -366,7 +406,9 @@ describe('tokens module interop', () => {
             template: templateB,
         } as DesignComponentNode;
 
-        const templateA = baseNode('tplA', { children: [accentBar('own_bar', { backgroundColor: 'accent' }), instanceB] });
+        const templateA = baseNode('tplA', {
+            children: [accentBar('own_bar', { backgroundColor: 'accent' }), instanceB],
+        });
         const instanceA = {
             ...baseNode('instA', { name: 'Color Combo' }),
             type: 'component',
@@ -460,14 +502,28 @@ describe('token-aware class generation', () => {
         const node = baseNode('palette', {
             style: { fills: [{ type: 'solid', color: '#0f172a', visible: true }], radius: 12 },
         });
-        const classes = generateClasses(node, { colors: {}, radii: {}, spacing: {}, colorNames: {}, radiusValues: {}, spacingValues: {} });
+        const classes = generateClasses(node, {
+            colors: {},
+            radii: {},
+            spacing: {},
+            colorNames: {},
+            radiusValues: {},
+            spacingValues: {},
+        });
         expect(classes).toContain('bg-slate-900');
         expect(classes).toContain('rounded-xl');
         expect(classes).not.toContain('bg-[#0f172a]');
     });
 
     it('emits token classes for text and border colors too', () => {
-        const tokens: DesignTokens = { colors: { color1: '#eef2f7' }, radii: {}, spacing: {}, colorNames: {}, radiusValues: {}, spacingValues: {} };
+        const tokens: DesignTokens = {
+            colors: { color1: '#eef2f7' },
+            radii: {},
+            spacing: {},
+            colorNames: {},
+            radiusValues: {},
+            spacingValues: {},
+        };
 
         const textNode = {
             ...baseNode('t'),

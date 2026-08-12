@@ -176,7 +176,9 @@ const cardOne: FramerNode = {
                     frame: { x: 0, y: 0, width: 24, height: 24 },
                     layout: { strategy: 'auto' },
                     style: {},
-                    vector: { svg: '<svg viewBox="0 0 24 24"><path d="M12 2l3 7 7 .9-5 4.9 1.5 7L12 18l-6.5 3.8L7 14.8 2 9.9 9 9z" fill="#f59e0b"/></svg>' },
+                    vector: {
+                        svg: '<svg viewBox="0 0 24 24"><path d="M12 2l3 7 7 .9-5 4.9 1.5 7L12 18l-6.5 3.8L7 14.8 2 9.9 9 9z" fill="#f59e0b"/></svg>',
+                    },
                     children: [],
                 },
             ],

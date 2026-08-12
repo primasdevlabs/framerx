@@ -12,12 +12,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-    SOURCE_PROPERTIES,
-    collectCoverage,
-    renderCoverageText,
-} from '../src/coverage';
-import { mockFramerDocument, parseFramerDocument } from '@framer/compiler-parser';
+import { SOURCE_PROPERTIES, collectCoverage, renderCoverageText } from '../src/coverage';
+import { mockFramerDocument } from '@framer/compiler-parser';
 import { compileFramerDocument, formatCoverage } from '../src/index';
 import type { DesignDocument } from '@framer/compiler-ast';
 
@@ -83,7 +79,9 @@ describe('collectCoverage on the mock document', () => {
             // the coverage report exists to surface; subsequent work
             // should drive that count to zero for fidelity-critical
             // properties.
-            expect(['emitted', 'ast-preserved', 'framer-preserved', 'unsupported', 'lost', 'discovered']).toContain(entry.stage);
+            expect(['emitted', 'ast-preserved', 'framer-preserved', 'unsupported', 'lost', 'discovered']).toContain(
+                entry.stage,
+            );
             if (entry.unsupported) expect(entry.stage).toBe('unsupported');
             if (entry.stage === 'emitted') {
                 // `emitted` does not strictly require source-discovered:
@@ -124,14 +122,27 @@ describe('collectCoverage on the mock document', () => {
                         style: {},
                         // An unresolved breakpoint/variant override kept as an
                         // independent node (the fold prunes resolved ones).
-                        source: { platform: 'framer', nodeId: 'rep_1', isReplica: true, originalId: 'missing_primary', breakpointName: 'Tablet' },
+                        source: {
+                            platform: 'framer',
+                            nodeId: 'rep_1',
+                            isReplica: true,
+                            originalId: 'missing_primary',
+                            breakpointName: 'Tablet',
+                        },
                         children: [],
                     },
                 ],
                 metadata: {
                     platform: 'framer',
                     extraction: {
-                        replicas: { status: 'partial', count: 0, failed: 1, unresolved: 1, unsupported: 0, reason: "1 replica(s) had no matching primary node ('Orphan Replica' (missing_primary))" },
+                        replicas: {
+                            status: 'partial',
+                            count: 0,
+                            failed: 1,
+                            unresolved: 1,
+                            unsupported: 0,
+                            reason: "1 replica(s) had no matching primary node ('Orphan Replica' (missing_primary))",
+                        },
                     },
                 },
             },
@@ -188,7 +199,6 @@ describe('collectCoverage on an empty document', () => {
     });
 
     it('also tolerates an AST-only call site (no Framer source provided)', async () => {
-        const ast = parseFramerDocument(mockFramerDocument);
         // Calling without a source: the compiler synthesizes an empty source
         // for the report — coverage groups should all show zero discovered
         // counts but the AST fingerprint still drives the `emitted` bucket.

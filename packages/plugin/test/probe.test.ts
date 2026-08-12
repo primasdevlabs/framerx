@@ -27,11 +27,29 @@ describe('captureSdkKeys', () => {
             getNodesWithType: async (type) =>
                 type === 'ComponentNode'
                     ? [
-                          { id: 'master_btn', name: 'Button Master', componentIdentifier: 'comp_btn', insertURL: 'framer.com/m/proj@Button@Button', componentName: 'Button' },
+                          {
+                              id: 'master_btn',
+                              name: 'Button Master',
+                              componentIdentifier: 'comp_btn',
+                              insertURL: 'framer.com/m/proj@Button@Button',
+                              componentName: 'Button',
+                          },
                       ]
                     : [
-                          { id: 'inst_1', name: 'Button', componentIdentifier: 'comp_btn', insertURL: null, componentName: 'Button' },
-                          { id: 'inst_2', name: 'Shared Thing', componentIdentifier: null, insertURL: null, componentName: 'SharedThing' },
+                          {
+                              id: 'inst_1',
+                              name: 'Button',
+                              componentIdentifier: 'comp_btn',
+                              insertURL: null,
+                              componentName: 'Button',
+                          },
+                          {
+                              id: 'inst_2',
+                              name: 'Shared Thing',
+                              componentIdentifier: null,
+                              insertURL: null,
+                              componentName: 'SharedThing',
+                          },
                       ],
             getCodeFiles: async () => [
                 {
@@ -40,7 +58,13 @@ describe('captureSdkKeys', () => {
                     path: 'code/Phosphor.tsx',
                     content: 'export function Phosphor() { return null }',
                     exports: [
-                        { name: 'Phosphor', componentId: 'comp_ph', insertURL: 'framer.com/m/proj@Phosphor.tsx@Phosphor', isDefaultExport: false, type: 'component' },
+                        {
+                            name: 'Phosphor',
+                            componentId: 'comp_ph',
+                            insertURL: 'framer.com/m/proj@Phosphor.tsx@Phosphor',
+                            isDefaultExport: false,
+                            type: 'component',
+                        },
                         { name: 'withAnalytics', type: 'override' },
                     ],
                 },
@@ -51,9 +75,18 @@ describe('captureSdkKeys', () => {
 
         // Raw key records.
         expect(dump.masters).toHaveLength(1);
-        expect(dump.masters[0]).toMatchObject({ id: 'master_btn', componentIdentifier: 'comp_btn', insertURL: 'framer.com/m/proj@Button@Button', componentName: 'Button' });
+        expect(dump.masters[0]).toMatchObject({
+            id: 'master_btn',
+            componentIdentifier: 'comp_btn',
+            insertURL: 'framer.com/m/proj@Button@Button',
+            componentName: 'Button',
+        });
         expect(dump.instances).toHaveLength(2);
-        expect(dump.instances[1]).toMatchObject({ id: 'inst_2', componentIdentifier: null, componentName: 'SharedThing' });
+        expect(dump.instances[1]).toMatchObject({
+            id: 'inst_2',
+            componentIdentifier: null,
+            componentName: 'SharedThing',
+        });
         expect(dump.codeFiles).toHaveLength(1);
         expect(dump.codeFiles[0].exports).toHaveLength(2);
         // Override exports are kept in the raw dump (they are part of the file).
@@ -73,9 +106,27 @@ describe('captureSdkKeys', () => {
                 type === 'ComponentNode'
                     ? []
                     : [
-                          { id: 'inst_ph', name: 'Phosphor', componentIdentifier: 'comp_ph', insertURL: 'framer.com/m/proj@Phosphor.tsx@Phosphor', componentName: 'Phosphor' },
-                          { id: 'inst_named', name: 'Ticker', componentIdentifier: 'engine_other', insertURL: null, componentName: 'Ticker' },
-                          { id: 'inst_orphan', name: 'Slideshow', componentIdentifier: null, insertURL: null, componentName: null },
+                          {
+                              id: 'inst_ph',
+                              name: 'Phosphor',
+                              componentIdentifier: 'comp_ph',
+                              insertURL: 'framer.com/m/proj@Phosphor.tsx@Phosphor',
+                              componentName: 'Phosphor',
+                          },
+                          {
+                              id: 'inst_named',
+                              name: 'Ticker',
+                              componentIdentifier: 'engine_other',
+                              insertURL: null,
+                              componentName: 'Ticker',
+                          },
+                          {
+                              id: 'inst_orphan',
+                              name: 'Slideshow',
+                              componentIdentifier: null,
+                              insertURL: null,
+                              componentName: null,
+                          },
                       ],
             getCodeFiles: async () => [
                 {
@@ -83,14 +134,30 @@ describe('captureSdkKeys', () => {
                     name: 'Phosphor.tsx',
                     path: 'code/Phosphor.tsx',
                     content: 'export function Phosphor() { return null }',
-                    exports: [{ name: 'Phosphor', componentId: 'comp_ph', insertURL: 'framer.com/m/proj@Phosphor.tsx@Phosphor', isDefaultExport: false, type: 'component' }],
+                    exports: [
+                        {
+                            name: 'Phosphor',
+                            componentId: 'comp_ph',
+                            insertURL: 'framer.com/m/proj@Phosphor.tsx@Phosphor',
+                            isDefaultExport: false,
+                            type: 'component',
+                        },
+                    ],
                 },
                 {
                     id: 'file_ticker',
                     name: 'Ticker.tsx',
                     path: 'code/Ticker.tsx',
                     content: 'export default function Ticker() { return null }',
-                    exports: [{ name: 'Ticker', componentId: 'comp_ticker_engine', insertURL: 'framer.com/m/proj@Ticker.tsx@Ticker', isDefaultExport: true, type: 'component' }],
+                    exports: [
+                        {
+                            name: 'Ticker',
+                            componentId: 'comp_ticker_engine',
+                            insertURL: 'framer.com/m/proj@Ticker.tsx@Ticker',
+                            isDefaultExport: true,
+                            type: 'component',
+                        },
+                    ],
                 },
             ],
         });

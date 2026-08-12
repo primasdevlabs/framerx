@@ -16,9 +16,30 @@ import { useCallback, useEffect, useRef } from 'react';
 import { extractFramerDocument } from '../parser/document';
 import { loadMockDocument } from '../parser/mock';
 import type { FramerApi } from '../parser/sdk';
-import { connectToFramer, isInFramerIframe } from '../parser/sdk';
+import { connectToFramer, isInFramerIframe, lastFramerConnectDiagnostics } from '../parser/sdk';
 import { usePluginStore } from '../store/plugin-store';
 
+/**
+ * A human-readable handshake-failure message, including the diagnostics that
+ * distinguish "the engine never answered" (registration / reachability) from
+ * "the engine answered but the SDK still did not come up" (protocol mismatch).
+ */
+function connectErrorMessage(): string {
+    const diagnostics = lastFramerConnectDiagnostics();
+    if (!diagnostics) {
+        return 'Could not connect to the Framer engine. Press Retry to try again.';
+    }
+    const seconds = Math.max(1, Math.round(diagnostics.elapsedMs / 1000));
+    if (diagnostics.receivedAnyResponse) {
+        return `The Framer engine answered, but the connection still failed after ${diagnostics.attempts} attempts (${seconds}s). Press Retry to try again.`;
+    }
+    return (
+        `Could not connect to the Framer engine: it did not answer the plugin-ready ` +
+        `handshake after ${diagnostics.attempts} attempts (${seconds}s). ` +
+        `Check that the plugin is reachable from Framer (dev server running, HTTPS, no ` +
+        `ad-blocker blocking localhost), then press Retry.`
+    );
+}
 export function useFramerDocument(): { refreshDocument: () => Promise<boolean> } {
     const setMode = usePluginStore((state) => state.setMode);
     const setApi = usePluginStore((state) => state.setApi);
@@ -49,7 +70,7 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
                 // document — the user asked for their project, not a demo.
                 if (isInFramerIframe()) {
                     setMode('framer');
-                    setError('Could not connect to the Framer engine. Close and reopen the plugin to try again.');
+                    setError(connectErrorMessage());
                     return;
                 }
 
@@ -112,7 +133,7 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
             if (!api) {
                 if (isInFramerIframe()) {
                     setMode('framer');
-                    setError('Could not connect to the Framer engine. Close and reopen the plugin to try again.');
+                    setError(connectErrorMessage());
                     return false;
                 }
                 // Standalone / demo mode: reload the mock document.

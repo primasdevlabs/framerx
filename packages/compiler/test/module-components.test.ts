@@ -125,16 +125,15 @@ describe('shared module components', () => {
     });
 
     it('emits the framer runtime shim and a type declaration for the bundle', async () => {
-        const result = await compileFramerDocument(
-            makeDocument([moduleInstance('t1', 'Ticker', tickerCode)]),
-            { projectName: 'module-demo' },
-        );
+        const result = await compileFramerDocument(makeDocument([moduleInstance('t1', 'Ticker', tickerCode)]), {
+            projectName: 'module-demo',
+        });
 
         // The shim provides RenderTarget/ControlType/addPropertyControls.
         const shim = result.files.find((f) => f.path === 'src/code/framer.js');
         expect(shim).toBeDefined();
         expect(shim!.content).toContain('RenderTarget');
-        expect(shim!.content).toContain('current: () => \'web\'');
+        expect(shim!.content).toContain("current: () => 'web'");
         expect(shim!.content).toContain('export function addPropertyControls');
         expect(shim!.content).toContain('ControlType');
 
@@ -167,20 +166,23 @@ describe('shared module components', () => {
     });
 
     it('pins the module bare imports in package.json and raises no framer-runtime warning', async () => {
-        const result = await compileFramerDocument(
-            makeDocument([moduleInstance('t1', 'Ticker', tickerCode)]),
-            { projectName: 'module-demo' },
-        );
+        const result = await compileFramerDocument(makeDocument([moduleInstance('t1', 'Ticker', tickerCode)]), {
+            projectName: 'module-demo',
+        });
 
         const pkg = result.files.find((f) => f.path === 'package.json')!;
         const json = JSON.parse(pkg.content) as { dependencies: Record<string, string> };
         expect(json.dependencies['framer-motion']).toBe('^12.0.0');
         expect(json.dependencies['@motionone/dom']).toBe('^10.18.0');
         // The shim covers 'framer' — no warning about the runtime import.
-        const framerWarning = result.diagnostics.validation.warnings.find((w) => w.message.includes("imports the 'framer' runtime"));
+        const framerWarning = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes("imports the 'framer' runtime"),
+        );
         expect(framerWarning).toBeUndefined();
         // No unknown-dependency warning (both bare imports are pinned).
-        const unknownWarning = result.diagnostics.validation.warnings.find((w) => w.message.includes('unknown dependencies'));
+        const unknownWarning = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('unknown dependencies'),
+        );
         expect(unknownWarning).toBeUndefined();
         expect(result.diagnostics.validation.valid).toBe(true);
     });
@@ -214,7 +216,10 @@ describe('shared module components', () => {
                     ...tickerCode,
                     source: `import { Helper } from "./Helper"\nexport default function Ticker() { return Helper(); }\n`,
                     dependencies: [
-                        { path: 'code/Helper.js', source: `import { RenderTarget } from "framer"\nexport function Helper() { return RenderTarget.current(); }\n` },
+                        {
+                            path: 'code/Helper.js',
+                            source: `import { RenderTarget } from "framer"\nexport function Helper() { return RenderTarget.current(); }\n`,
+                        },
                     ],
                 }),
             ]),
@@ -230,7 +235,9 @@ describe('shared module components', () => {
     });
 
     it('is deterministic across exports', async () => {
-        const doc = makeDocument([moduleInstance('t1', 'Ticker', tickerCode, { text: 'x', speed: 24 }, [textNode('c', 'Item', 'Y')])]);
+        const doc = makeDocument([
+            moduleInstance('t1', 'Ticker', tickerCode, { text: 'x', speed: 24 }, [textNode('c', 'Item', 'Y')]),
+        ]);
         const a = await compileFramerDocument(doc, { projectName: 'module-demo' });
         const b = await compileFramerDocument(doc, { projectName: 'module-demo' });
 

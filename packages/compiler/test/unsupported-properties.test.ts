@@ -18,7 +18,12 @@ import { SOURCE_PROPERTIES, collectCoverage } from '../src/coverage';
 import { compileFramerDocument } from '../src/index';
 import { mockFramerDocument, parseFramerDocument } from '@framer/compiler-parser';
 
-const PROPERTY_IDS = ['layout.gridColumnWidth', 'style.cursor', 'layout.gridRowHeight', 'style.imageRendering'] as const;
+const PROPERTY_IDS = [
+    'layout.gridColumnWidth',
+    'style.cursor',
+    'layout.gridRowHeight',
+    'style.imageRendering',
+] as const;
 
 /** Build a fixture exercising both previously-unsupported properties. */
 function makeUnsupportedFixture(): typeof mockFramerDocument {
@@ -38,9 +43,30 @@ function makeUnsupportedFixture(): typeof mockFramerDocument {
         },
         style: {},
         children: [
-            { id: 'n_grid_a', type: 'Frame', name: 'A', frame: { x: 0, y: 0, width: 280, height: 240 }, layout: { strategy: 'auto' }, style: {} },
-            { id: 'n_grid_b', type: 'Frame', name: 'B', frame: { x: 304, y: 0, width: 280, height: 240 }, layout: { strategy: 'auto' }, style: {} },
-            { id: 'n_grid_c', type: 'Frame', name: 'C', frame: { x: 608, y: 0, width: 280, height: 240 }, layout: { strategy: 'auto' }, style: {} },
+            {
+                id: 'n_grid_a',
+                type: 'Frame',
+                name: 'A',
+                frame: { x: 0, y: 0, width: 280, height: 240 },
+                layout: { strategy: 'auto' },
+                style: {},
+            },
+            {
+                id: 'n_grid_b',
+                type: 'Frame',
+                name: 'B',
+                frame: { x: 304, y: 0, width: 280, height: 240 },
+                layout: { strategy: 'auto' },
+                style: {},
+            },
+            {
+                id: 'n_grid_c',
+                type: 'Frame',
+                name: 'C',
+                frame: { x: 608, y: 0, width: 280, height: 240 },
+                layout: { strategy: 'auto' },
+                style: {},
+            },
         ],
     };
     const grabbable = {
@@ -51,7 +77,14 @@ function makeUnsupportedFixture(): typeof mockFramerDocument {
         layout: { strategy: 'auto' },
         style: { cursor: 'grab' },
         children: [
-            { id: 'n_grab_label', type: 'Text', name: 'Label', frame: { x: 0, y: 0, width: 200, height: 40 }, layout: { strategy: 'auto' }, text: { text: 'Drag me', style: { fontFamily: 'Inter', fontSize: 16 } } },
+            {
+                id: 'n_grab_label',
+                type: 'Text',
+                name: 'Label',
+                frame: { x: 0, y: 0, width: 200, height: 40 },
+                layout: { strategy: 'auto' },
+                text: { text: 'Drag me', style: { fontFamily: 'Inter', fontSize: 16 } },
+            },
         ],
     };
     const pixelatedImage = {
@@ -62,7 +95,14 @@ function makeUnsupportedFixture(): typeof mockFramerDocument {
         layout: { strategy: 'auto' },
         style: { imageRendering: 'pixelated' },
         children: [
-            { id: 'n_pixel_inner', type: 'Frame', name: 'Inner', frame: { x: 0, y: 0, width: 320, height: 320 }, layout: { strategy: 'auto' }, style: {} },
+            {
+                id: 'n_pixel_inner',
+                type: 'Frame',
+                name: 'Inner',
+                frame: { x: 0, y: 0, width: 320, height: 320 },
+                layout: { strategy: 'auto' },
+                style: {},
+            },
         ],
     };
     return {
@@ -219,7 +259,9 @@ describe('no regression on the mock document', () => {
         const result = await compileFramerDocument(mockFramerDocument, { projectName: 'mock-manifest' });
         const manifest = result.files.find((f) => f.path === '.export-manifest.json');
         expect(manifest).toBeDefined();
-        const parsed = JSON.parse(manifest?.content ?? '{}') as { components: { definitions: number; instances: number } };
+        const parsed = JSON.parse(manifest?.content ?? '{}') as {
+            components: { definitions: number; instances: number };
+        };
         expect(parsed.components.definitions).toBeGreaterThan(0);
         expect(parsed.components.instances).toBeGreaterThan(0);
     });
@@ -231,7 +273,10 @@ describe('empty-source smoke', () => {
         const ast = parseFramerDocument(empty);
         const report = collectCoverage({ source: empty, ast, files: [] });
         for (const id of PROPERTY_IDS) {
-            expect(report.properties.find((p) => p.id === id)?.emitted, `${id} should not be emitted on empty source`).toBe(false);
+            expect(
+                report.properties.find((p) => p.id === id)?.emitted,
+                `${id} should not be emitted on empty source`,
+            ).toBe(false);
         }
     });
 });

@@ -116,7 +116,15 @@ function resolveRelativeImport(fromPath: string, specifier: string, existing: Se
     if (!specifier.startsWith('.')) return undefined;
     const fromDir = fromPath.slice(0, fromPath.lastIndexOf('/') + 1);
     const base = normalizePath(`${fromDir}${specifier}`);
-    const candidates = [base, `${base}.tsx`, `${base}.ts`, `${base}.jsx`, `${base}.js`, `${base}/index.tsx`, `${base}/index.ts`];
+    const candidates = [
+        base,
+        `${base}.tsx`,
+        `${base}.ts`,
+        `${base}.jsx`,
+        `${base}.js`,
+        `${base}/index.tsx`,
+        `${base}/index.ts`,
+    ];
     for (const candidate of candidates) {
         if (existing.has(candidate)) return candidate;
     }
@@ -139,7 +147,8 @@ function normalizePath(path: string): string {
 }
 
 /** Match a single import declaration line (`import … from '…';` / `import '…';`). */
-const IMPORT_RE = /^import\s+(?:type\s+)?(?:\{([^}]*)\}|\*\s+as\s+\w+|\w+)\s*(?:,\s*\{([^}]*)\})?\s+from\s+['"]([^'"]+)['"];?$/;
+const IMPORT_RE =
+    /^import\s+(?:type\s+)?(?:\{([^}]*)\}|\*\s+as\s+\w+|\w+)\s*(?:,\s*\{([^}]*)\})?\s+from\s+['"]([^'"]+)['"];?$/;
 const SIDE_EFFECT_IMPORT_RE = /^import\s+['"]([^'"]+)['"];?$/;
 
 /** Extract import specifiers from a single code line. */
@@ -153,7 +162,12 @@ function importSpecifiers(line: string): { module: string; names: string[]; side
     const names = [first ?? '', second ?? '']
         .join(',')
         .split(',')
-        .map((part) => part.trim().split(/\s+as\s+/)[0].trim())
+        .map((part) =>
+            part
+                .trim()
+                .split(/\s+as\s+/)[0]
+                .trim(),
+        )
         .filter(Boolean);
     return { module: match[3], names };
 }
@@ -173,13 +187,14 @@ function collectImports(content: string): Array<{ module: string; names: string[
 /** Collect every `assets/…` / `public/…` path referenced inside code files. */
 function collectAssetReferences(content: string): string[] {
     const refs: string[] = [];
-    // Imports: from '../assets/images/hero.png' / '../../public/fonts/x.woff2'
-    const importRe = /from\s+['"]((?:\.\.?\/)+(?:src\/)?(?:assets|public)\/[^'"]+)['"]/g;
-    // url() references inside inline styles.
-    const urlRe = /url\(\s*['"]((?:\.\.?\/)+(?:src\/)?(?:assets|public)\/[^'"]+)['"]\s*\)/g;
-    // Direct src attributes pointing into the project.
-    const srcRe = /src=["']((?:\.\.?\/)+(?:src\/)?(?:assets|public)\/[^'"]+)["']/g;
-    for (const re of [importRe, urlRe, srcRe]) {
+    // Relative refs: from '../assets/images/hero.png' / '../../public/fonts/x.woff2'
+    const relativeRe = /(?:from\s+|(?:src|href)=|url\(\s*)['"]((?:\.\.?\/)+(?:src\/)?(?:assets|public)\/[^'"]+)['"]/g;
+    // Absolute public URLs (Vite serves public/ at the root in dev and copies
+    // it into dist/): '/assets/images/x.png' / '/fonts/x.woff2'. The capture
+    // KEEPS the leading slash so the resolver can tell it apart from a
+    // relative reference.
+    const absoluteRe = /(?:from\s+|(?:src|href)=|url\(\s*)['"](\/(?:assets|fonts)\/[^'"]+)['"]/g;
+    for (const re of [relativeRe, absoluteRe]) {
         let match: RegExpExecArray | null;
         while ((match = re.exec(content)) !== null) {
             refs.push(match[1]);
@@ -188,10 +203,30 @@ function collectAssetReferences(content: string): string[] {
     return refs;
 }
 
+/**
+ * Resolve an asset reference to a concrete project file path.
+ *
+ * Relative refs resolve against the referencing file. Absolute public URLs
+ * (`/assets/images/x.png`, `/fonts/x.woff2`) map to `public/` — the directory
+ * Vite serves at the root in dev and copies verbatim into `dist/`.
+ */
+function resolveAssetReference(fromPath: string, ref: string): string {
+    if (ref.startsWith('/')) {
+        const withoutSlash = ref.slice(1);
+        if (withoutSlash.startsWith('assets/') || withoutSlash.startsWith('fonts/')) {
+            return `public/${withoutSlash}`;
+        }
+        return withoutSlash;
+    }
+    const fromDir = fromPath.slice(0, fromPath.lastIndexOf('/') + 1);
+    return normalizePath(`${fromDir}${ref}`);
+}
+
 /** Collect remote (http/https/data/blob) URL references inside code files. */
 function collectRemoteReferences(content: string): string[] {
     const refs: string[] = [];
-    const re = /(?:src|href)=["']((?:https?:|data:|blob:)\/\/[^'"]+)["']|url\(\s*['"]((?:https?:|data:|blob:)\/\/[^'"]+)['"]\s*\)/g;
+    const re =
+        /(?:src|href)=["']((?:https?:|data:|blob:)\/\/[^'"]+)["']|url\(\s*['"]((?:https?:|data:|blob:)\/\/[^'"]+)['"]\s*\)/g;
     let match: RegExpExecArray | null;
     while ((match = re.exec(content)) !== null) {
         const ref = match[1] ?? match[2];
@@ -209,7 +244,10 @@ const REMOTE_URL_RE = /^(https?:|data:|blob:)/i;
  * Returns a structured report. `valid` is false when any error exists; the
  * compiler refuses to produce a ZIP for invalid projects.
  */
-export async function validateExport(files: VirtualFile[], options: ValidateOptions = {}): Promise<ExportValidationResult> {
+export async function validateExport(
+    files: VirtualFile[],
+    options: ValidateOptions = {},
+): Promise<ExportValidationResult> {
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
     const existing = pathSet(files);
@@ -221,7 +259,11 @@ export async function validateExport(files: VirtualFile[], options: ValidateOpti
     }
     for (const [path, count] of pathCounts) {
         if (count > 1) {
-            errors.push({ stage: 'assembly', path, message: `Duplicate output file: ${path} is generated ${count} times.` });
+            errors.push({
+                stage: 'assembly',
+                path,
+                message: `Duplicate output file: ${path} is generated ${count} times.`,
+            });
         }
     }
 
@@ -229,7 +271,11 @@ export async function validateExport(files: VirtualFile[], options: ValidateOpti
     const syntaxByPath = await validateFilesSyntax(files);
     for (const [path, issues] of syntaxByPath) {
         for (const issue of issues) {
-            errors.push({ stage: 'codegen', path, message: `Syntax error in ${path} (${issue.parser}): ${issue.message.split('\n')[0]}` });
+            errors.push({
+                stage: 'codegen',
+                path,
+                message: `Syntax error in ${path} (${issue.parser}): ${issue.message.split('\n')[0]}`,
+            });
         }
     }
 
@@ -248,7 +294,11 @@ export async function validateExport(files: VirtualFile[], options: ValidateOpti
             seen.set(module, existingNames);
         }
         if (duplicateImports.length > 0) {
-            errors.push({ stage: 'codegen', path: file.path, message: `Duplicate import${duplicateImports.length > 1 ? 's' : ''}: ${duplicateImports.join(', ')}.` });
+            errors.push({
+                stage: 'codegen',
+                path: file.path,
+                message: `Duplicate import${duplicateImports.length > 1 ? 's' : ''}: ${duplicateImports.join(', ')}.`,
+            });
         }
 
         // Relative imports must resolve to a real project file.
@@ -256,26 +306,42 @@ export async function validateExport(files: VirtualFile[], options: ValidateOpti
             if (!module.startsWith('.')) continue;
             const resolved = resolveRelativeImport(file.path, module, existing);
             if (!resolved && names.length > 0) {
-                errors.push({ stage: 'codegen', path: file.path, message: `Import '${module}' from ${file.path} does not resolve to any generated file.` });
+                errors.push({
+                    stage: 'codegen',
+                    path: file.path,
+                    message: `Import '${module}' from ${file.path} does not resolve to any generated file.`,
+                });
             }
         }
 
         // Asset references must point at files that exist in the project.
         for (const ref of collectAssetReferences(file.content)) {
-            const resolved = normalizePath(`${file.path.slice(0, file.path.lastIndexOf('/') + 1)}${ref}`);
+            const resolved = resolveAssetReference(file.path, ref);
             if (!existing.has(resolved)) {
-                errors.push({ stage: 'assets', path: file.path, message: `Asset reference '${ref}' (→ ${resolved}) does not exist in the exported project.` });
+                errors.push({
+                    stage: 'assets',
+                    path: file.path,
+                    message: `Asset reference '${ref}' (→ ${resolved}) does not exist in the exported project.`,
+                });
             }
         }
 
         // Remote URL references are reported (the project is not self-contained).
         const remoteImports = collectImports(file.content).filter(({ module }) => REMOTE_URL_RE.test(module));
         for (const { module } of remoteImports) {
-            warnings.push({ stage: 'assets', path: file.path, message: `Remote reference '${module}' — the export depends on an external URL.` });
+            warnings.push({
+                stage: 'assets',
+                path: file.path,
+                message: `Remote reference '${module}' — the export depends on an external URL.`,
+            });
         }
         for (const ref of collectRemoteReferences(file.content)) {
             if (ref.startsWith('data:')) continue;
-            warnings.push({ stage: 'assets', path: file.path, message: `Remote reference '${ref}' — the export depends on an external URL; local bytes were not available from the Framer Plugin API.` });
+            warnings.push({
+                stage: 'assets',
+                path: file.path,
+                message: `Remote reference '${ref}' — the export depends on an external URL; local bytes were not available from the Framer Plugin API.`,
+            });
         }
     }
 
@@ -299,11 +365,18 @@ export async function validateExport(files: VirtualFile[], options: ValidateOpti
         }
     }
     if (usedResponsiveClasses.size > 0 && !responsiveCss) {
-        errors.push({ stage: 'responsive', message: `${usedResponsiveClasses.size} responsive class(es) referenced but src/styles/responsive.css was not generated.` });
+        errors.push({
+            stage: 'responsive',
+            message: `${usedResponsiveClasses.size} responsive class(es) referenced but src/styles/responsive.css was not generated.`,
+        });
     }
     for (const className of usedResponsiveClasses) {
         if (!responsiveSelectors.has(className)) {
-            errors.push({ stage: 'responsive', path: 'src/styles/responsive.css', message: `Responsive class '${className}' is used in generated code but has no rule in responsive.css.` });
+            errors.push({
+                stage: 'responsive',
+                path: 'src/styles/responsive.css',
+                message: `Responsive class '${className}' is used in generated code but has no rule in responsive.css.`,
+            });
         }
     }
 
@@ -313,10 +386,18 @@ export async function validateExport(files: VirtualFile[], options: ValidateOpti
         try {
             const parsed = JSON.parse(packageFile.content) as Record<string, unknown>;
             if (typeof parsed.name !== 'string') {
-                errors.push({ stage: 'assembly', path: 'package.json', message: 'package.json is missing a name field.' });
+                errors.push({
+                    stage: 'assembly',
+                    path: 'package.json',
+                    message: 'package.json is missing a name field.',
+                });
             }
         } catch (error) {
-            errors.push({ stage: 'assembly', path: 'package.json', message: `package.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}` });
+            errors.push({
+                stage: 'assembly',
+                path: 'package.json',
+                message: `package.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+            });
         }
     } else {
         errors.push({ stage: 'assembly', message: 'The project is missing package.json.' });
@@ -364,7 +445,9 @@ export async function validateExport(files: VirtualFile[], options: ValidateOpti
     // ── Statistics ─────────────────────────────────────────────────────────
     const document = options.document;
     const nodes = document ? countNodes(document.nodes) : 0;
-    const components = document ? countComponents(document.nodes) : files.filter((file) => file.path.startsWith('src/components/')).length;
+    const components = document
+        ? countComponents(document.nodes)
+        : files.filter((file) => file.path.startsWith('src/components/')).length;
 
     return {
         valid: errors.length === 0,

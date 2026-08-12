@@ -15,10 +15,7 @@
 
 import { fatFixtureDocument, masterBackedDocument, mockFramerDocument } from '@framer/compiler-parser';
 
-import {
-    DEFAULT_BREAKPOINT_TOLERANCES,
-    type BreakpointTolerance,
-} from '../src/compare/tolerance';
+import { DEFAULT_BREAKPOINT_TOLERANCES, type BreakpointTolerance } from '../src/compare/tolerance';
 import { runVisualRegression } from '../src/run';
 
 const FIXTURES: Record<string, { document: typeof fatFixtureDocument; name: string }> = {
@@ -128,7 +125,9 @@ async function main(): Promise<void> {
 
     console.log(`▶ Visual regression — ${fixture.name}`);
     console.log(`  Reference: ${args.referenceUrl ?? 'local render (independent source→HTML baseline)'}`);
-    console.log(`  Breakpoints: ${args.breakpoints.map((b) => `${b.name}@${b.width}px (≤${(b.tolerance * 100).toFixed(1)}%)`).join(', ')}`);
+    console.log(
+        `  Breakpoints: ${args.breakpoints.map((b) => `${b.name}@${b.width}px (≤${(b.tolerance * 100).toFixed(1)}%)`).join(', ')}`,
+    );
     console.log(`  Output: ${args.outDir}/${fixture.name}`);
 
     const report = await runVisualRegression({

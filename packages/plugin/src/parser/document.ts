@@ -5,12 +5,24 @@
  * converts it into the platform-neutral FramerDocument shape.
  */
 
-import type { FramerDocument, FramerImage, FramerImageRef, FramerNode, FramerResponsiveOverride } from '@framer/compiler-parser';
+import type {
+    FramerDocument,
+    FramerImage,
+    FramerImageRef,
+    FramerNode,
+    FramerResponsiveOverride,
+} from '@framer/compiler-parser';
 
-import { probeFontsCapability, probeImageGetDataCapability, type CapabilityProbe, type CapabilityReport } from './capabilities';
+import {
+    probeFontsCapability,
+    probeImageGetDataCapability,
+    type CapabilityProbe,
+    type CapabilityReport,
+} from './capabilities';
 import { fetchCodeFiles } from './code-files';
 import type { ModuleTextFetcher } from './modules';
-import type { ExtractionStatus, FramerApi, FramerCanvasRoot, FramerPage, FramerSdkFont } from './sdk';
+import type { ExtractionStatus, FramerApi, FramerCanvasRoot, FramerNodeLike, FramerPage, FramerSdkFont } from './sdk';
+import { SDK_CALL_TIMEOUT_MS, withTimeout } from './sdk';
 import { safeParseNode, type ImageResolutionMap, type ParseContext, type UnmatchedInstance } from './node';
 import type { SdkNode } from './sdk-types';
 
@@ -45,14 +57,25 @@ function classifyError(apiName: string, error: unknown): ExtractionStatus {
  * componentIdentifier and its insertURL — instances may carry either key, and
  * shared components can expose different identifiers.
  */
-async function fetchComponentMasters(api: FramerApi): Promise<FetchResult> {
+async function fetchComponentMasters(api: FramerApi, callTimeout: number): Promise<FetchResult> {
     const map = new Map<string, SdkNode>();
     const byName = new Map<string, SdkNode>();
     if (typeof api.getNodesWithType !== 'function') {
-        return { map, byName, status: { status: 'unavailable', reason: 'The SDK does not expose getNodesWithType; component masters cannot be read.' } };
+        return {
+            map,
+            byName,
+            status: {
+                status: 'unavailable',
+                reason: 'The SDK does not expose getNodesWithType; component masters cannot be read.',
+            },
+        };
     }
     try {
-        const componentNodes = await api.getNodesWithType('ComponentNode');
+        const componentNodes = await withTimeout(
+            api.getNodesWithType('ComponentNode'),
+            callTimeout,
+            'getNodesWithType(ComponentNode)',
+        );
         let count = 0;
         for (const master of componentNodes) {
             const sdk = master as unknown as SdkNode;
@@ -73,7 +96,11 @@ async function fetchComponentMasters(api: FramerApi): Promise<FetchResult> {
             }
         }
         if (count === 0) {
-            return { map, byName, status: { status: 'empty', reason: 'getNodesWithType resolved but returned no ComponentNode masters.' } };
+            return {
+                map,
+                byName,
+                status: { status: 'empty', reason: 'getNodesWithType resolved but returned no ComponentNode masters.' },
+            };
         }
         return { map, byName, status: { status: 'ok', count } };
     } catch (error) {
@@ -96,6 +123,12 @@ export interface ExtractFramerDocumentOptions {
      * against the font URLs exposed by `framer.getFonts()`).
      */
     fontFetcher?: FontBytesFetcher;
+    /**
+     * How long a single SDK call may take before it is treated as a hang and
+     * degrades like a throw (defaults to `SDK_CALL_TIMEOUT_MS`). Injectable
+     * so tests can verify the timeout path without waiting 10s.
+     */
+    sdkCallTimeoutMs?: number;
 }
 
 /** Font file formats the registry can emit. */
@@ -128,7 +161,12 @@ function fontFormatFromUrl(url: string): FramerFontAsset['sources'][number]['for
  * those fonts genuinely have no downloadable source (custom fonts are not
  * exposed to plugins) — never conflated, never silently dropped.
  */
-async function collectProjectFonts(api: FramerApi, fetcher: FontBytesFetcher, fontsProbe: CapabilityProbe): Promise<{ fonts: FramerFontAsset[]; status: ExtractionStatus }> {
+async function collectProjectFonts(
+    api: FramerApi,
+    fetcher: FontBytesFetcher,
+    fontsProbe: CapabilityProbe,
+    callTimeout: number,
+): Promise<{ fonts: FramerFontAsset[]; status: ExtractionStatus }> {
     const fonts: FramerFontAsset[] = [];
     if (typeof api.getFonts !== 'function') {
         // The probe (passed in) classified this as an SDK capability gap — its
@@ -139,20 +177,28 @@ async function collectProjectFonts(api: FramerApi, fetcher: FontBytesFetcher, fo
             fonts,
             status: {
                 status: 'unavailable',
-                reason: fontsProbe.available ? 'The SDK does not expose framer.getFonts; fonts are exported as metadata only.' : fontsProbe.reason,
+                reason: fontsProbe.available
+                    ? 'The SDK does not expose framer.getFonts; fonts are exported as metadata only.'
+                    : fontsProbe.reason,
             },
         };
     }
 
     let sdkFonts: FramerSdkFont[];
     try {
-        sdkFonts = await api.getFonts();
+        sdkFonts = await withTimeout(api.getFonts(), callTimeout, 'getFonts()');
     } catch (error) {
         return { fonts, status: classifyError('getFonts()', error) };
     }
 
     if (sdkFonts.length === 0) {
-        return { fonts, status: { status: 'empty', reason: 'getFonts resolved but returned no fonts (custom fonts are not exposed to plugins).' } };
+        return {
+            fonts,
+            status: {
+                status: 'empty',
+                reason: 'getFonts resolved but returned no fonts (custom fonts are not exposed to plugins).',
+            },
+        };
     }
 
     let withSource = 0;
@@ -189,7 +235,9 @@ async function collectProjectFonts(api: FramerApi, fetcher: FontBytesFetcher, fo
                   failed: noSource.length,
                   reason: `${noSource.length} font(s) have no downloadable source file (${Array.from(new Set(noSource))
                       .slice(0, 5)
-                      .join(', ')}${noSource.length > 5 ? ', …' : ''}) — framer.getFonts IS available, but these fonts' url is null: custom fonts are not exposed to the plugin API. This is a property of the fonts, not a missing API; the rest are bundled.`,
+                      .join(
+                          ', ',
+                      )}${noSource.length > 5 ? ', …' : ''}) — framer.getFonts IS available, but these fonts' url is null: custom fonts are not exposed to the plugin API. This is a property of the fonts, not a missing API; the rest are bundled.`,
               };
     return { fonts, status };
 }
@@ -320,7 +368,12 @@ export function foldReplicaOverrides(nodes: FramerNode[]): { nodes: FramerNode[]
 }
 
 /** Fold one replica's overridden attributes into its primary's responsive behavior. */
-function foldReplicaIntoPrimary(primary: FramerNode, replica: FramerNode, breakpointName: string, stats: ReplicaFoldStats): void {
+function foldReplicaIntoPrimary(
+    primary: FramerNode,
+    replica: FramerNode,
+    breakpointName: string,
+    stats: ReplicaFoldStats,
+): void {
     const { override, unsupported } = buildResponsiveOverride(primary, replica);
     for (const reason of unsupported) stats.unsupported.push(reason);
     if (Object.keys(override).length === 0) return; // pure duplicate — inherits everything
@@ -336,7 +389,10 @@ function foldReplicaIntoPrimary(primary: FramerNode, replica: FramerNode, breakp
  * values are the per-breakpoint override. Inherited (equal) values produce
  * nothing, so a replica that changed nothing folds to an empty override.
  */
-function buildResponsiveOverride(primary: FramerNode, replica: FramerNode): { override: FramerResponsiveOverride; unsupported: string[] } {
+function buildResponsiveOverride(
+    primary: FramerNode,
+    replica: FramerNode,
+): { override: FramerResponsiveOverride; unsupported: string[] } {
     const override: FramerResponsiveOverride = {};
     const unsupported: string[] = [];
     const p = primary.layout ?? {};
@@ -444,7 +500,10 @@ function nodeImageRef(node: FramerNode): FramerImage | FramerImageRef | undefine
 }
 
 /** Merge a new override into an existing one for the same (primary, breakpoint). */
-function mergeResponsiveOverride(existing: FramerResponsiveOverride | undefined, incoming: FramerResponsiveOverride): FramerResponsiveOverride {
+function mergeResponsiveOverride(
+    existing: FramerResponsiveOverride | undefined,
+    incoming: FramerResponsiveOverride,
+): FramerResponsiveOverride {
     return {
         ...(existing?.layout || incoming.layout ? { layout: { ...existing?.layout, ...incoming.layout } } : {}),
         ...(existing?.sizing || incoming.sizing ? { sizing: { ...existing?.sizing, ...incoming.sizing } } : {}),
@@ -465,18 +524,36 @@ function mergeResponsiveOverride(existing: FramerResponsiveOverride | undefined,
     };
 }
 
+/**
+ * Whether a node is a page node (`webPage` / `designPage`).
+ *
+ * Real SDK nodes carry their class kind in `nodeType`; the getChildren()
+ * presence alone cannot tell a v4 page from a v4 content frame (both expose
+ * it), which is exactly how the legacy-page heuristic dropped top-level
+ * content when the page enumeration was unavailable.
+ */
+function isPageNode(node: FramerNodeLike | FramerPage): boolean {
+    const type = typeof node.nodeType === 'string' ? node.nodeType.toLowerCase().replace(/[^a-z]/g, '') : '';
+    return type === 'webpage' || type === 'designpage';
+}
+
 /** Extract the full Framer document from the SDK. */
 export async function extractFramerDocument(
     api: FramerApi,
     options: ExtractFramerDocumentOptions = {},
 ): Promise<FramerDocument> {
     // A canvas the engine cannot read must not abort the whole load — degrade
-    // to an empty document rather than fail the extraction.
+    // to an empty document rather than fail the extraction. The reason is
+    // recorded so a timed-out / denied canvas root is never a SILENT empty
+    // state (the export diagnostics can say the engine did not answer).
+    const callTimeout = options.sdkCallTimeoutMs ?? SDK_CALL_TIMEOUT_MS;
     let root: FramerCanvasRoot | null = null;
+    let rootError: string | null = null;
     try {
-        root = await api.getCanvasRoot();
-    } catch {
+        root = await withTimeout(api.getCanvasRoot(), callTimeout, 'getCanvasRoot');
+    } catch (error) {
         root = null;
+        rootError = error instanceof Error ? error.message : String(error);
     }
     if (!root) {
         return {
@@ -484,14 +561,86 @@ export async function extractFramerDocument(
             name: 'Framer Document',
             version: '1.0.0',
             nodes: [],
-            metadata: { platform: 'framer' },
+            metadata: {
+                platform: 'framer',
+                extraction: {
+                    canvasRoot: {
+                        status: 'error',
+                        reason: `The Framer engine did not return a canvas root (${rootError ?? 'null'}). The project could not be read.`,
+                    },
+                },
+            },
         };
     }
+
+    // Enumerate the canvas pages to walk.
+    //
+    // Two SDK generations must be handled:
+    //   • v4 `@framer/plugin` — `getCanvasRoot()` returns the ACTIVE page node
+    //     whose `getChildren()` are the top-level canvas content nodes directly
+    //     (NO intermediate pages layer). Any additional pages (web/design) are
+    //     discovered via `getNodesWithType('WebPageNode'|'DesignPageNode')`.
+    //   • legacy SDK — the root object's children WERE an array of pages, each
+    //     with its own `getChildren()`.
+    //
+    // The reliable discriminator is the root's OWN node class — real SDK nodes
+    // always carry `nodeType` — NOT the page enumeration (which can be
+    // unavailable/denied) and NOT the children's getChildren() presence (v4
+    // content frames expose getChildren exactly like legacy page nodes, so the
+    // old heuristic silently misread v4 content as legacy pages and dropped
+    // every top-level section when the page enumeration came up empty).
     let pages: FramerPage[] = [];
+    let flatCanvasChildren: SdkNode[] = [];
+    let rootChildren: FramerNodeLike[] = [];
     try {
-        pages = await root.getChildren();
+        rootChildren = await withTimeout(root.getChildren(), callTimeout, 'getChildren(canvas root)');
     } catch {
-        pages = [];
+        rootChildren = [];
+    }
+
+    let enumeratedPages: FramerPage[] = [];
+    let rootIsEnumeratedPage = false;
+    if (typeof api.getNodesWithType === 'function') {
+        try {
+            const [webPages, designPages] = await Promise.all([
+                withTimeout(api.getNodesWithType('WebPageNode'), callTimeout, 'getNodesWithType(WebPageNode)'),
+                withTimeout(api.getNodesWithType('DesignPageNode'), callTimeout, 'getNodesWithType(DesignPageNode)'),
+            ]);
+            const allPages = [...(webPages ?? []), ...(designPages ?? [])];
+            rootIsEnumeratedPage = allPages.some((page) => page.id === root.id);
+            enumeratedPages = allPages
+                .filter((page) => page.id !== root.id)
+                .map((page) => page as unknown as FramerPage);
+        } catch {
+            enumeratedPages = [];
+        }
+    }
+
+    // v4: the root IS a page/content node (WebPageNode | DesignPageNode |
+    // ComponentNode | VectorSetNode) whose children are top-level content —
+    // even when the page enumeration is unavailable, the root's own nodeType
+    // says so. This also covers editing a component: the root is a ComponentNode,
+    // not a page, but its children are still content.
+    const rootIsV4ContentNode = rootIsEnumeratedPage || typeof (root as FramerNodeLike).nodeType === 'string';
+    if (rootIsV4ContentNode) {
+        // v4: the root's children are top-level content; OTHER pages come
+        // from the project-wide node enumeration.
+        flatCanvasChildren = rootChildren as unknown as SdkNode[];
+        pages = enumeratedPages;
+    } else {
+        // Legacy shape: the root is a plain root object whose children ARE
+        // page nodes. Guarded by the page-node check so v4 content can never
+        // be mistaken for legacy pages (a v4 content frame's nodeType is
+        // 'frame'/'text'/…, never 'webPage'/'designPage').
+        const rootChildrenAreLegacyPages =
+            rootChildren.length > 0 &&
+            rootChildren.every((child) => typeof (child as FramerPage).getChildren === 'function' && isPageNode(child));
+        if (rootChildrenAreLegacyPages) {
+            pages = rootChildren as unknown as FramerPage[];
+        } else {
+            flatCanvasChildren = rootChildren as unknown as SdkNode[];
+            pages = enumeratedPages;
+        }
     }
 
     // Project-wide fonts come from getFonts() (one entry per weight/style,
@@ -501,14 +650,19 @@ export async function extractFramerDocument(
     // "API missing" (SDK surface gap) and "font has no downloadable source"
     // (custom font) cases are never conflated in the diagnostics.
     const fontsProbe = probeFontsCapability(api);
-    const fontFetch = await collectProjectFonts(api, options.fontFetcher ?? defaultFontBytesFetcher, fontsProbe);
+    const fontFetch = await collectProjectFonts(
+        api,
+        options.fontFetcher ?? defaultFontBytesFetcher,
+        fontsProbe,
+        callTimeout,
+    );
 
     // Component masters give every instance its real definition body (slot
     // positions + per-slot props) instead of a synthesized approximation.
-    const masters = await fetchComponentMasters(api);
+    const masters = await fetchComponentMasters(api, callTimeout);
     // Code files give every code-component instance its REAL source — the
     // true implementation instead of a synthesized approximation.
-    const codeFiles = await fetchCodeFiles(api);
+    const codeFiles = await fetchCodeFiles(api, callTimeout);
     const context: ParseContext = {
         masters: masters.map,
         mastersByName: masters.byName,
@@ -520,18 +674,24 @@ export async function extractFramerDocument(
         // are fetched with plain fetch — CORS is open on the CDN — and each
         // bundle resolves once per extraction (deduped across instances).
         moduleFetcher: options.moduleFetcher ?? defaultModuleFetcher,
+        sdkCallTimeoutMs: callTimeout,
         moduleCache: new Map(),
         modulePaths: new Set(),
         moduleFailures: [],
     };
 
     const walkedNodes: FramerNode[] = [];
+    // v4: the ACTIVE page's own children are top-level content (the root IS
+    // the active page). Walk them first so the current canvas is never empty.
+    for (const child of flatCanvasChildren) {
+        walkedNodes.push(await safeParseNode(child, context));
+    }
     for (const page of pages) {
         // A page the SDK cannot walk must not abort the whole extraction —
         // the remaining pages still load.
         let children: SdkNode[] = [];
         try {
-            children = (await page.getChildren()) as SdkNode[];
+            children = (await withTimeout(page.getChildren(), callTimeout, `getChildren(${page.id})`)) as SdkNode[];
         } catch {
             children = [];
         }
@@ -539,6 +699,12 @@ export async function extractFramerDocument(
             walkedNodes.push(await safeParseNode(child, context));
         }
     }
+    // Diagnostic: a zero-scan is immediately visible in the dev tools instead
+    // of a silent empty state. The page count is the active root (when its
+    // children were walked as content) plus the enumerated additional pages.
+    console.info(
+        `[framerx] extracted ${walkedNodes.length} top-level node(s) across ${(flatCanvasChildren.length > 0 ? 1 : 0) + pages.length} canvas page(s)`,
+    );
 
     // Responsive replicas (SDK `isReplica`) are breakpoint/variant OVERRIDES
     // of a primary node, not duplicated content: fold each replica's
@@ -556,8 +722,7 @@ export async function extractFramerDocument(
     // componentIdentifier X / insertURL Y and nothing matched" instead of a
     // flat "synthesized". Shared only when something actually went unmatched.
     const unmatched = (context.unmatchedInstances ?? []).filter(
-        (instance, index, all) =>
-            all.findIndex((other) => other.id === instance.id) === index,
+        (instance, index, all) => all.findIndex((other) => other.id === instance.id) === index,
     );
     // Shared-module resolution outcome: how many published bundles resolved
     // to real implementations vs. failed to fetch (each counted once per
@@ -653,10 +818,14 @@ function imageExtractionStatus(context: ParseContext): ExtractionStatus | undefi
             .slice(0, 3)
             .map((f) => `${f.url ?? '(no URL)'}: ${f.error}`)
             .join('; ');
-        reasonParts.push(`${failed.length} image(s) could not read original bytes via getData (${sample}${failed.length > 3 ? '; …' : ''})`);
+        reasonParts.push(
+            `${failed.length} image(s) could not read original bytes via getData (${sample}${failed.length > 3 ? '; …' : ''})`,
+        );
     }
     if (unavailable.length > 0) {
-        reasonParts.push(`${unavailable.length} image(s) exposed no getData (the SDK surface did not provide ImageAsset.getData on those assets) — exported via URL fetch (remote reference)`);
+        reasonParts.push(
+            `${unavailable.length} image(s) exposed no getData (the SDK surface did not provide ImageAsset.getData on those assets) — exported via URL fetch (remote reference)`,
+        );
     }
     return {
         status: 'partial',
@@ -687,7 +856,9 @@ function replicaExtractionStatus(stats: ReplicaFoldStats): ExtractionStatus | un
             .slice(0, 3)
             .map((u) => `'${u.name}' (${u.originalId ?? 'no originalId'})`)
             .join('; ');
-        reasonParts.push(`${stats.unresolved.length} replica(s) had no matching primary node (${sample}${stats.unresolved.length > 3 ? '; …' : ''}) and were kept as independent nodes`);
+        reasonParts.push(
+            `${stats.unresolved.length} replica(s) had no matching primary node (${sample}${stats.unresolved.length > 3 ? '; …' : ''}) and were kept as independent nodes`,
+        );
     }
     if (stats.unsupported.length > 0) {
         const sample = stats.unsupported.slice(0, 3).join('; ');
@@ -737,9 +908,9 @@ function moduleExtractionStatus(context: ParseContext): ExtractionStatus | undef
 /** Fetch a module bundle's text (CORS is open on Framer's module CDN). */
 const defaultModuleFetcher: ModuleTextFetcher = async (url) => {
     try {
-        const response = await fetch(url);
+        const response = await withTimeout(fetch(url), SDK_CALL_TIMEOUT_MS, `fetch module ${url}`);
         if (!response.ok) return null;
-        return await response.text();
+        return await withTimeout(response.text(), SDK_CALL_TIMEOUT_MS, `read module ${url}`);
     } catch {
         return null;
     }
@@ -748,9 +919,9 @@ const defaultModuleFetcher: ModuleTextFetcher = async (url) => {
 /** Fetch a font file's bytes (font URLs are CORS-open for @font-face use). */
 const defaultFontBytesFetcher: FontBytesFetcher = async (url) => {
     try {
-        const response = await fetch(url);
+        const response = await withTimeout(fetch(url), SDK_CALL_TIMEOUT_MS, `fetch font ${url}`);
         if (!response.ok) return null;
-        return new Uint8Array(await response.arrayBuffer());
+        return new Uint8Array(await withTimeout(response.arrayBuffer(), SDK_CALL_TIMEOUT_MS, `read font ${url}`));
     } catch {
         return null;
     }

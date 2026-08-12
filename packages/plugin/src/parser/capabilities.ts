@@ -20,9 +20,7 @@ import type { ParseContext } from './node';
 import type { FramerApi } from './sdk';
 
 /** The outcome of probing one SDK capability. */
-export type CapabilityProbe =
-    | { available: true }
-    | { available: false; reason: string };
+export type CapabilityProbe = { available: true } | { available: false; reason: string };
 
 /** The runtime capability report for one extraction. */
 export interface CapabilityReport {

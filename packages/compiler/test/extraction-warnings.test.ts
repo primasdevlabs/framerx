@@ -34,12 +34,7 @@ function sectionRoot(id: string, name: string, children: FramerNode[]): FramerNo
 }
 
 /** A code-component instance (real source fetched through the SDK). */
-function codeInstance(
-    id: string,
-    name: string,
-    props: Record<string, unknown>,
-    source: string,
-): FramerNode {
+function codeInstance(id: string, name: string, props: Record<string, unknown>, source: string): FramerNode {
     return {
         id,
         type: 'Component',
@@ -63,7 +58,7 @@ function codeInstance(
     };
 }
 
-/** An inline-SVG vector node — its asset file is written to src/assets/images. */
+/** An inline-SVG vector node — its asset file is written to public/assets/images. */
 function vectorNode(id: string, name: string, svg: string): FramerNode {
     return {
         id,
@@ -91,7 +86,10 @@ describe('extraction root-cause warnings', () => {
     it('surfaces a warning explaining why component bodies were synthesized', async () => {
         const result = await compileFramerDocument(
             docWithExtraction({
-                masters: { status: 'unavailable', reason: 'The SDK does not expose getNodesWithType; component masters cannot be read.' },
+                masters: {
+                    status: 'unavailable',
+                    reason: 'The SDK does not expose getNodesWithType; component masters cannot be read.',
+                },
                 codeFiles: { status: 'ok', count: 3 },
             }),
             { projectName: 'extraction-warnings' },
@@ -104,7 +102,9 @@ describe('extraction root-cause warnings', () => {
         expect(extractionWarnings[0].message).toContain('synthesized');
         // The wall of per-component "synthesized" warnings is still there —
         // the root cause now explains them.
-        expect(result.diagnostics.validation.warnings.some((w) => w.message.includes('synthesized from instance props'))).toBe(true);
+        expect(
+            result.diagnostics.validation.warnings.some((w) => w.message.includes('synthesized from instance props')),
+        ).toBe(true);
     });
 
     it('surfaces a warning when code files were denied by permissions', async () => {
@@ -127,7 +127,10 @@ describe('extraction root-cause warnings', () => {
             docWithExtraction({
                 masters: { status: 'ok', count: 0 },
                 codeFiles: { status: 'ok', count: 0 },
-                fonts: { status: 'unavailable', reason: 'The SDK does not expose getFonts; fonts are exported as metadata only.' },
+                fonts: {
+                    status: 'unavailable',
+                    reason: 'The SDK does not expose getFonts; fonts are exported as metadata only.',
+                },
             }),
             { projectName: 'extraction-warnings' },
         );
@@ -153,7 +156,9 @@ describe('extraction root-cause warnings', () => {
             { projectName: 'extraction-warnings' },
         );
 
-        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('Image original bytes could not be resolved'));
+        const warning = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('Image original bytes could not be resolved'),
+        );
         expect(warning).toBeDefined();
         expect(warning!.message).toContain('partial');
         expect(warning!.message).toContain('2 image(s) exported via URL fetch');
@@ -184,7 +189,9 @@ describe('extraction root-cause warnings', () => {
             { projectName: 'extraction-warnings' },
         );
 
-        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('Image original bytes could not be resolved'));
+        const warning = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('Image original bytes could not be resolved'),
+        );
         expect(warning).toBeDefined();
         // The probe names the gap: this is an SDK surface limitation, not a
         // per-image failure.
@@ -209,7 +216,9 @@ describe('extraction root-cause warnings', () => {
             { projectName: 'extraction-warnings' },
         );
 
-        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('Image original bytes could not be resolved'));
+        const warning = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('Image original bytes could not be resolved'),
+        );
         expect(warning).toBeDefined();
         expect(warning!.message).toContain('engine rejected the read');
         expect(warning!.message).not.toContain('capability probe');
@@ -273,7 +282,11 @@ describe('extraction root-cause warnings', () => {
             docWithExtraction({
                 masters: { status: 'ok', count: 0 },
                 codeFiles: { status: 'ok', count: 0 },
-                fonts: { status: 'partial', failed: 2, reason: '2 font(s) have no downloadable source file (Custom Display, X) — custom fonts are not available to the plugin API; the rest are bundled.' },
+                fonts: {
+                    status: 'partial',
+                    failed: 2,
+                    reason: '2 font(s) have no downloadable source file (Custom Display, X) — custom fonts are not available to the plugin API; the rest are bundled.',
+                },
             }),
             { projectName: 'extraction-warnings' },
         );
@@ -284,7 +297,10 @@ describe('extraction root-cause warnings', () => {
     it('surfaces both warnings when both enrichments degraded', async () => {
         const result = await compileFramerDocument(
             docWithExtraction({
-                masters: { status: 'empty', reason: 'getNodesWithType resolved but returned no ComponentNode masters.' },
+                masters: {
+                    status: 'empty',
+                    reason: 'getNodesWithType resolved but returned no ComponentNode masters.',
+                },
                 codeFiles: { status: 'error', reason: 'getCodeFiles threw: engine exploded' },
             }),
             { projectName: 'extraction-warnings' },
@@ -338,10 +354,14 @@ describe('extraction root-cause warnings', () => {
             { projectName: 'extraction-warnings' },
         );
 
-        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('matched neither a component master nor a code file'));
+        const warning = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('matched neither a component master nor a code file'),
+        );
         expect(warning).toBeDefined();
         expect(warning!.message).toContain('2 component instance(s)');
-        expect(warning!.message).toContain('Slideshow [componentIdentifier: comp_a, insertURL: framer.com/m/proj@Slideshow.tsx@Slideshow, componentName: Slideshow]');
+        expect(warning!.message).toContain(
+            'Slideshow [componentIdentifier: comp_a, insertURL: framer.com/m/proj@Slideshow.tsx@Slideshow, componentName: Slideshow]',
+        );
         expect(warning!.message).toContain('Ticker [no identifying keys]');
     });
 
@@ -360,7 +380,9 @@ describe('extraction root-cause warnings', () => {
             { projectName: 'extraction-warnings' },
         );
 
-        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('Shared module components could not be fully fetched'));
+        const warning = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('Shared module components could not be fully fetched'),
+        );
         expect(warning).toBeDefined();
         expect(warning!.message).toContain('partial');
         expect(warning!.message).toContain('2 component bundle(s)');
@@ -408,14 +430,28 @@ describe('extraction root-cause warnings', () => {
                 masters: { status: 'ok', count: 1 },
                 codeFiles: { status: 'empty', reason: 'no files' },
                 unmatchedInstances: [
-                    { id: 'inst_a', name: 'Phosphor', componentIdentifier: 'comp_p', insertURL: null, componentName: 'Phosphor' },
-                    { id: 'inst_a', name: 'Phosphor', componentIdentifier: 'comp_p', insertURL: null, componentName: 'Phosphor' },
+                    {
+                        id: 'inst_a',
+                        name: 'Phosphor',
+                        componentIdentifier: 'comp_p',
+                        insertURL: null,
+                        componentName: 'Phosphor',
+                    },
+                    {
+                        id: 'inst_a',
+                        name: 'Phosphor',
+                        componentIdentifier: 'comp_p',
+                        insertURL: null,
+                        componentName: 'Phosphor',
+                    },
                 ],
             }),
             { projectName: 'extraction-warnings' },
         );
 
-        const warning = result.diagnostics.validation.warnings.find((w) => w.message.includes('matched neither a component master nor a code file'));
+        const warning = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('matched neither a component master nor a code file'),
+        );
         expect(warning).toBeDefined();
         expect(warning!.message).toContain('1 component instance(s)');
         expect(warning!.message).not.toContain('more');
@@ -436,14 +472,20 @@ describe('orphaned-asset triage', () => {
                     // The asset's inline SVG is written to disk by the registry,
                     // but generated code inlines the SVG directly — the file
                     // itself is unreferenced by code.
-                    vectorNode('v1', 'Icon', '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="#000"/></svg>'),
+                    vectorNode(
+                        'v1',
+                        'Icon',
+                        '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="#000"/></svg>',
+                    ),
                 ]),
             ],
         };
 
         const result = await compileFramerDocument(doc, { projectName: 'orphan-triage' });
 
-        const orphan = result.diagnostics.validation.warnings.find((w) => w.message.includes('src/assets/images/Icon.svg'));
+        const orphan = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('public/assets/images/Icon.svg'),
+        );
         expect(orphan).toBeDefined();
         expect(orphan!.message).toContain('referenced only by a code component');
         expect(orphan!.message).toContain('Slideshow');
@@ -458,14 +500,20 @@ describe('orphaned-asset triage', () => {
             version: '1.0.0',
             nodes: [
                 sectionRoot('root', 'Gallery Section', [
-                    vectorNode('v1', 'Icon', '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="#000"/></svg>'),
+                    vectorNode(
+                        'v1',
+                        'Icon',
+                        '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="#000"/></svg>',
+                    ),
                 ]),
             ],
         };
 
         const result = await compileFramerDocument(doc, { projectName: 'orphan-triage' });
 
-        const orphan = result.diagnostics.validation.warnings.find((w) => w.message.includes('src/assets/images/Icon.svg'));
+        const orphan = result.diagnostics.validation.warnings.find((w) =>
+            w.message.includes('public/assets/images/Icon.svg'),
+        );
         expect(orphan).toBeDefined();
         expect(orphan!.message).toContain('written but never referenced');
         // No triage explanation — nothing references it, it is a real gap.

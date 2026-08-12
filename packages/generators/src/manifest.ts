@@ -74,7 +74,8 @@ export const EXPORT_MANIFEST_PATH = '.export-manifest.json';
 export function renderExportManifest(input: ExportManifestInput): string {
     const payload: Record<string, unknown> = {
         compilerVersion: input.compilerVersion ?? '0.1.0',
-        exportedAt: input.exportedAt ?? (input.derivationHash ? `derivation:${input.derivationHash}` : 'derivation:none'),
+        exportedAt:
+            input.exportedAt ?? (input.derivationHash ? `derivation:${input.derivationHash}` : 'derivation:none'),
         projectName: sanitize(input.projectName, 'framer-export'),
         source: { name: input.sourceName ?? null },
         nodes: { discovered: input.coverage?.discovered ?? 0, preserved: input.coverage?.preserved ?? 0 },
@@ -108,7 +109,10 @@ export function generateExportManifest(input: ExportManifestInput): VirtualFile 
 }
 
 /** Stable iteration order for the coverage property entries. */
-function stableCoverageArray(properties: ReadonlyArray<{ id: string; sdkAttribute: string; stage: string; discoveredCount?: number }> | undefined): Array<Record<string, unknown>> {
+function stableCoverageArray(
+    properties:
+        ReadonlyArray<{ id: string; sdkAttribute: string; stage: string; discoveredCount?: number }> | undefined,
+): Array<Record<string, unknown>> {
     if (!Array.isArray(properties)) return [];
     return [...properties]
         .sort((a, b) => String(a.id ?? '').localeCompare(String(b.id ?? '')))

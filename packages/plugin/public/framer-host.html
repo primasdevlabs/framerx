@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FramerX — fake engine host</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+  #controls {
+    width: 300px;
+    flex: none;
+    padding: 12px;
+    border-right: 1px solid rgba(128, 128, 128, 0.35);
+    overflow-y: auto;
+  }
+  #controls h1 { font-size: 15px; margin: 0 0 4px; }
+  #controls p.hint { margin: 0 0 12px; font-size: 11px; opacity: 0.7; }
+  .group { margin-bottom: 14px; }
+  .group h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; margin: 0 0 6px; }
+  .group button {
+    display: block;
+    width: 100%;
+    margin: 4px 0;
+    padding: 7px 10px;
+    border: 1px solid rgba(128, 128, 128, 0.4);
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+  }
+  .group button:hover { background: rgba(128, 128, 128, 0.12); }
+  .group button.active { border-color: #4c9aff; background: rgba(76, 154, 255, 0.15); }
+  #state { font-size: 12px; padding: 4px 8px; border-radius: 5px; margin-bottom: 10px; display: inline-block; }
+  #state.ok { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
+  #state.bad { background: rgba(218, 54, 51, 0.2); color: #da3633; }
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 10px;
+    font: 11px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
+    white-space: pre-wrap;
+  }
+  #log .entry { margin: 2px 0; }
+  #log .req { color: #4c9aff; }
+  #log .res { color: #2ea043; }
+  #log .err { color: #da3633; }
+  #pluginPane { flex: 1; display: flex; }
+  iframe { flex: 1; border: none; background: white; }
+</style>
+</head>
+<body>
+  <div id="controls">
+    <h1>Fake Framer engine</h1>
+    <p class="hint">
+      Embeds the plugin in an iframe and speaks the <code>@framer/plugin</code> v4
+      postMessage protocol, so the panel runs in real <strong>framer mode</strong> against a
+      simulated canvas. Use the buttons to break (and repair) the engine, then drive the
+      plugin&rsquo;s Retry / Rescan from inside the iframe.
+    </p>
+    <div id="state">state: healthy</div>
+
+    <div class="group">
+      <h2>Engine behavior</h2>
+      <button data-state="healthy">Healthy engine</button>
+      <button data-state="no-handshake">Never answer the handshake (no engine)</button>
+      <button data-state="hang-canvas-root">Handshake OK, but getCanvasRoot hangs</button>
+      <button data-state="error-canvas-root">Handshake OK, getCanvasRoot throws</button>
+    </div>
+
+    <div class="group">
+      <h2>Push events</h2>
+      <button id="pushCanvas">Notify canvas root changed</button>
+    </div>
+
+    <div class="group">
+      <h2>Log</h2>
+      <button id="clearLog">Clear log</button>
+    </div>
+  </div>
+
+  <div id="pluginPane"><iframe id="plugin" src="/" title="plugin"></iframe></div>
+  <div id="log"></div>
+
+  <script>
+    'use strict'
+
+    // ── Fake project data (marshaled `@framer/plugin` shape: plain objects
+    //    tagged with `__class`, exactly what the engine serializes). ─────────
+    function imageAsset(id, url) {
+      return { __class: 'ImageAsset', id, url, thumbnailUrl: url, altText: null, resolution: null }
+    }
+    function rect(x, y, width, height) { return { x, y, width, height } }
+
+    // A FrameNode per the SDK's `FrameNode` (k) marshaled shape.
+    function frameNode(id, name, overrides) {
+      return Object.assign(
+        {
+          __class: 'FrameNode',
+          id,
+          name,
+          nodeType: 'FrameNode',
+          visible: true,
+          locked: false,
+          position: 'relative',
+          opacity: 1,
+          rotation: 0,
+          layout: 'stack',
+          gap: 12,
+          width: '100%',
+          height: 'auto',
+        },
+        overrides,
+      )
+    }
+    function textNode(id, name, text) {
+      return {
+        __class: 'TextNode',
+        id,
+        name,
+        nodeType: 'TextNode',
+        visible: true,
+        locked: false,
+        position: 'relative',
+        opacity: 1,
+        rotation: 0,
+        width: 'auto',
+        height: 'auto',
+        _text: text,
+        _fontSize: 24,
+        _color: '#111111',
+      }
+    }
+    function componentInstance(id, name, componentIdentifier, componentName) {
+      return {
+        __class: 'ComponentInstanceNode',
+        id,
+        name,
+        nodeType: 'ComponentInstanceNode',
+        componentIdentifier,
+        componentName,
+        visible: true,
+        locked: false,
+        position: 'relative',
+        width: 'auto',
+        height: 'auto',
+      }
+    }
+    function componentMaster(id, name, componentIdentifier) {
+      return {
+        __class: 'ComponentNode',
+        id,
+        name,
+        nodeType: 'ComponentNode',
+        componentIdentifier,
+        componentName: name,
+        visible: true,
+        locked: false,
+        position: 'relative',
+        width: 'auto',
+        height: 'auto',
+        children: [],
+      }
+    }
+
+    var hero = frameNode('n-hero', 'Hero', {
+      layout: 'stack',
+      gap: 8,
+      padding: { top: 24, right: 24, bottom: 24, left: 24 },
+      backgroundColor: '#0b0f14',
+    })
+    var headline = textNode('n-headline', 'Headline', 'Ship production React in one click')
+    hero.children = [headline]
+
+    var card = frameNode('n-card', 'Card', {
+      layout: 'stack',
+      gap: 8,
+      backgroundImage: imageAsset('img-hero', 'https://picsum.photos/seed/framerx/640/360'),
+      backgroundColor: '#ffffff',
+    })
+    card.children = []
+
+    var cta = componentInstance('n-cta', 'Primary CTA', 'btn-primary', 'Button')
+    var root = {
+      __class: 'WebPageNode',
+      id: 'page-home',
+      name: 'Home',
+      nodeType: 'WebPageNode',
+      children: [hero, card, cta],
+    }
+    var master = componentMaster('m-button', 'Button', 'btn-primary')
+
+    var nodes = [root, hero, headline, card, cta, master]
+    var rects = {
+      'page-home': rect(0, 0, 1440, 900),
+      'n-hero': rect(0, 0, 1440, 420),
+      'n-headline': rect(24, 24, 600, 40),
+      'n-card': rect(0, 420, 1440, 320),
+      'n-cta': rect(120, 60, 180, 48),
+      'm-button': rect(0, 0, 180, 48),
+    }
+
+    // ── Engine state. The plugin iframe is NEVER reloaded when the state
+    //    changes — the point is to exercise the panel's own Retry/Rescan. ────
+    var engineState = 'healthy'
+    var subscribers = new Map()
+
+    // ── Host protocol handlers ────────────────────────────────────────────────
+    function respond(source, origin, msg) {
+      if (!source) return
+      source.postMessage(msg, origin || '*')
+    }
+
+    function handleSignal(source, origin, data) {
+      if (data && data.type === 'pluginReadySignal') {
+        log('req', 'pluginReadySignal → pluginReadyResponse')
+        if (engineState === 'no-handshake') {
+          log('err', '  (suppressed — engine never answers the handshake)')
+          return
+        }
+        respond(source, origin, {
+          type: 'pluginReadyResponse',
+          mode: 'canvas',
+          permissionMap: {
+            getCanvasRoot: true,
+            getChildren: true,
+            getRect: true,
+            getNodesWithType: true,
+            getFonts: true,
+            getCodeFiles: true,
+            getText: true,
+            getImageData: true,
+            showUI: true,
+          },
+          environmentInfo: { platform: 'web', pluginOrigin: origin },
+          theme: null,
+          initialState: { mode: 'canvas', intent: 'plugin/open' },
+        })
+        return true
+      }
+      return false
+    }
+
+    function handleInvocation(source, origin, data) {
+      var method = data.methodName
+      var id = data.id
+      var args = data.args || []
+      log('req', 'invoke ' + method + ' (' + JSON.stringify(args) + ')')
+
+      var result
+      switch (method) {
+        case 'showUI':
+          result = undefined
+          break
+        case 'getCanvasRoot':
+          if (engineState === 'hang-canvas-root') {
+            log('err', '  (getCanvasRoot hangs — no response ever sent)')
+            return
+          }
+          if (engineState === 'error-canvas-root') {
+            respond(source, origin, { type: 'methodResponse', id, error: 'getCanvasRoot: engine refused' })
+            return
+          }
+          result = root
+          break
+        case 'getChildren':
+          var parent = nodes.find(function (n) { return n.id === args[0] })
+          result = parent && parent.children ? parent.children : []
+          break
+        case 'getRect':
+          result = rects[args[0]] || rect(0, 0, 100, 100)
+          break
+        case 'getText':
+          var tn = nodes.find(function (n) { return n.id === args[0] })
+          result = tn && typeof tn._text === 'string' ? tn._text : null
+          break
+        case 'getNodesWithType':
+          // args: [null (rootId), type]
+          var type = args[1]
+          if (type === 'WebPageNode') result = [root]
+          else if (type === 'DesignPageNode') result = []
+          else if (type === 'ComponentNode') result = [master]
+          else if (type === 'ComponentInstanceNode') result = [cta]
+          else result = []
+          break
+        case 'getFonts':
+          result = [
+            {
+              selector: 'inter-400',
+              family: 'Inter',
+              weight: 400,
+              style: 'normal',
+              url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2',
+            },
+          ]
+          break
+        case 'getCodeFiles':
+          result = []
+          break
+        case 'getImageData':
+          result = null
+          break
+        default:
+          // Unknown methods resolve to null (harmless for reads).
+          result = null
+      }
+
+      if (method !== 'showUI') log('res', '  → ' + (result === undefined ? 'undefined' : JSON.stringify(result).slice(0, 220)))
+      respond(source, origin, { type: 'methodResponse', id, result })
+    }
+
+    function handleSubscribe(source, origin, data) {
+      var topic = data.topic
+      if (!subscribers.has(topic)) subscribers.set(topic, new Set())
+      subscribers.get(topic).add(source)
+      log('req', 'subscribe ' + topic)
+      // Push the current value immediately so subscriptions settle fast.
+      if (topic === 'canvasRoot') {
+        respond(source, origin, { type: 'subscriptionMessage', topic, payload: root })
+      }
+    }
+
+    // ── Wire up the message stream ───────────────────────────────────────────
+    window.addEventListener('message', function (event) {
+      var data = event.data
+      if (!data || typeof data !== 'object') return
+      if (event.source !== document.getElementById('plugin').contentWindow) return
+      if (handleSignal(event.source, event.origin, data)) return
+      switch (data.type) {
+        case 'methodInvocation':
+          handleInvocation(event.source, event.origin, data)
+          break
+        case 'subscribe':
+          handleSubscribe(event.source, event.origin, data)
+          break
+        default:
+          log('req', 'unhandled message type: ' + data.type)
+      }
+    })
+
+    // ── Controls ─────────────────────────────────────────────────────────────
+    var stateBadge = document.getElementById('state')
+    function setEngineState(next) {
+      engineState = next
+      stateBadge.textContent = 'state: ' + next
+      stateBadge.className = next === 'healthy' ? 'ok' : 'bad'
+      Array.prototype.forEach.call(document.querySelectorAll('[data-state]'), function (b) {
+        b.classList.toggle('active', b.getAttribute('data-state') === next)
+      })
+      log('res', '→ engine state set to ' + next + ' (plugin iframe left untouched)')
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('[data-state]'), function (b) {
+      b.addEventListener('click', function () { setEngineState(b.getAttribute('data-state')) })
+    })
+
+    document.getElementById('pushCanvas').addEventListener('click', function () {
+      var set = subscribers.get('canvasRoot')
+      if (!set || set.size === 0) {
+        log('res', 'no canvasRoot subscribers — plugin re-reads on Rescan anyway')
+        return
+      }
+      set.forEach(function (source) {
+        source.postMessage({ type: 'subscriptionMessage', topic: 'canvasRoot', payload: root }, '*')
+      })
+      log('res', '→ pushed canvasRoot subscription message')
+    })
+
+    document.getElementById('clearLog').addEventListener('click', function () {
+      document.getElementById('log').textContent = ''
+    })
+
+    var logEl = document.getElementById('log')
+    function log(kind, text) {
+      var line = document.createElement('div')
+      line.className = 'entry ' + kind
+      line.textContent = text
+      logEl.appendChild(line)
+      logEl.scrollTop = logEl.scrollHeight
+    }
+    log('res', 'fake engine ready — loading plugin iframe…')
+  </script>
+</body>
+</html>

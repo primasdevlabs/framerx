@@ -94,7 +94,8 @@ describe('.export-manifest.json emission', () => {
 
         // Strip the exportedAt timestamp on both sides (the real export
         // includes it; tests pin otherwise).
-        const stripTimestamp = (text: string): string => text.replace(/"exportedAt"\s*:\s*"[^"]+"/, '"exportedAt":"' + stubTime + '"');
+        const stripTimestamp = (text: string): string =>
+            text.replace(/"exportedAt"\s*:\s*"[^"]+"/, '"exportedAt":"' + stubTime + '"');
         expect(stripTimestamp(aManifest.content)).toBe(stripTimestamp(bManifest.content));
     });
 
@@ -158,7 +159,9 @@ describe('generateExportManifest helper', () => {
         );
 
         const manifest = result.files.find((file) => file.path === EXPORT_MANIFEST_PATH)!;
-        const parsed = JSON.parse(manifest.content) as { replicas: { discovered: number; folded: number; unresolved: number; unsupported: number } };
+        const parsed = JSON.parse(manifest.content) as {
+            replicas: { discovered: number; folded: number; unresolved: number; unsupported: number };
+        };
         expect(parsed.replicas).toEqual({ discovered: 4, folded: 3, unresolved: 1, unsupported: 0 });
     });
 });

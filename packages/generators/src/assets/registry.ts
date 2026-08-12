@@ -40,7 +40,7 @@ import type { VirtualFile } from '../types';
 export interface AssetFile {
     /** The originating asset (first occurrence wins the content group). */
     asset: Asset;
-    /** The project-relative output path (e.g. `src/assets/images/hero.png`). */
+    /** The project-relative output path (e.g. `public/assets/images/hero.png`). */
     path: string;
     /** The binary bytes (images, videos, fonts, decoded data URIs). */
     data?: Uint8Array;
@@ -90,7 +90,13 @@ const EXTENSION_BY_MIME: Record<string, string> = {
 /** Build the asset registry for a document. Deterministic: same input → same output. */
 export function buildAssetRegistry(document: DesignDocument): AssetRegistry {
     // 1. Normalize every source asset into a content carrier.
-    const normalized: Array<{ asset: Asset; data?: Uint8Array; text?: string; remoteOnly?: boolean; mimeType?: string }> = [];
+    const normalized: Array<{
+        asset: Asset;
+        data?: Uint8Array;
+        text?: string;
+        remoteOnly?: boolean;
+        mimeType?: string;
+    }> = [];
     for (const asset of document.assets) {
         if (asset.data && asset.data.byteLength > 0) {
             normalized.push({ asset, data: asset.data });
@@ -115,11 +121,11 @@ export function buildAssetRegistry(document: DesignDocument): AssetRegistry {
     }
 
     // 2. Deduplicate by content (bytes or text); remote-only dedups by URL.
-    const byContentKey = new Map<string, typeof normalized[number]>();
+    const byContentKey = new Map<string, (typeof normalized)[number]>();
     const order: string[] = [];
     // Every source entry → its content key, so identical assets reached via
     // different URLs all resolve to the single physical file.
-    const contentKeyOf = new Map<typeof normalized[number], string>();
+    const contentKeyOf = new Map<(typeof normalized)[number], string>();
     for (const entry of normalized) {
         const key = contentKey(entry);
         contentKeyOf.set(entry, key);
@@ -225,17 +231,26 @@ function urlBaseName(src: string): string | undefined {
     return sanitized || undefined;
 }
 
-/** The output directory for an asset type. */
+/**
+ * The output directory for an asset type.
+ *
+ * Everything lands under `public/` so Vite copies it VERBATIM into the
+ * production build (a runtime-string `<img src>` / `url()` reference is not
+ * bundled or rewritten — the file must physically ship in `dist/`). Code
+ * references resolve to absolute `/assets/...` / `/fonts/...` URLs, which the
+ * dev server and the built app both serve from the project root. This is the
+ * same layout the fonts registry already uses (`public/fonts` + `/fonts/...`).
+ */
 function assetDirectory(type: Asset['type']): string {
     switch (type) {
         case 'font':
             return 'public/fonts';
         case 'icon':
-            return 'src/assets/icons';
+            return 'public/assets/icons';
         case 'video':
-            return 'src/assets/videos';
+            return 'public/assets/videos';
         default:
-            return 'src/assets/images';
+            return 'public/assets/images';
     }
 }
 

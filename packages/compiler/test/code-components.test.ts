@@ -162,13 +162,20 @@ describe('code-component definitions', () => {
     it('passes instance children through to code components', async () => {
         const result = await compileFramerDocument(
             makeDocument([
-                codeInstance('c1', 'comp_card', 'Card', {
-                    source: `export function Card({ children }: { children?: React.ReactNode }) {\n    return <div className=\"card\">{children}</div>\n}\n`,
-                    fileName: 'Card.tsx',
-                    path: 'code/Card.tsx',
-                    exportName: 'Card',
-                    isDefaultExport: false,
-                }, {}, [textNode('child', 'Body', 'Inside the card')]),
+                codeInstance(
+                    'c1',
+                    'comp_card',
+                    'Card',
+                    {
+                        source: `export function Card({ children }: { children?: React.ReactNode }) {\n    return <div className=\"card\">{children}</div>\n}\n`,
+                        fileName: 'Card.tsx',
+                        path: 'code/Card.tsx',
+                        exportName: 'Card',
+                        isDefaultExport: false,
+                    },
+                    {},
+                    [textNode('child', 'Body', 'Inside the card')],
+                ),
             ]),
             { projectName: 'code-demo' },
         );

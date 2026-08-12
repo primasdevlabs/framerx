@@ -29,12 +29,7 @@ import { collectCoverage } from '../src/coverage';
 import { compileFramerDocument } from '../src/index';
 import { parseFramerDocument, mockFramerDocument } from '@framer/compiler-parser';
 
-const PROPERTY_IDS = [
-    'layout.stackWrapEnabled',
-    'layout.position',
-    'asset.image',
-    'component.master',
-] as const;
+const PROPERTY_IDS = ['layout.stackWrapEnabled', 'layout.position', 'asset.image', 'component.master'] as const;
 
 /**
  * Build a FramerDocument exercising every formerly-ast-preserved property:
@@ -59,8 +54,22 @@ function makeAstPreservedFixture(): typeof mockFramerDocument {
         },
         style: { fills: [{ type: 'solid', color: '#f8fafc', visible: true }] },
         children: [
-            { id: 'n_wrap_child_1', type: 'Frame', name: 'A', frame: { x: 0, y: 0, width: 120, height: 80 }, layout: { strategy: 'auto' }, style: {} },
-            { id: 'n_wrap_child_2', type: 'Frame', name: 'B', frame: { x: 128, y: 0, width: 120, height: 80 }, layout: { strategy: 'auto' }, style: {} },
+            {
+                id: 'n_wrap_child_1',
+                type: 'Frame',
+                name: 'A',
+                frame: { x: 0, y: 0, width: 120, height: 80 },
+                layout: { strategy: 'auto' },
+                style: {},
+            },
+            {
+                id: 'n_wrap_child_2',
+                type: 'Frame',
+                name: 'B',
+                frame: { x: 128, y: 0, width: 120, height: 80 },
+                layout: { strategy: 'auto' },
+                style: {},
+            },
         ],
     };
     const absoluteNode = {
@@ -99,8 +108,21 @@ function makeAstPreservedFixture(): typeof mockFramerDocument {
             radius: 12,
         },
         children: [
-            { id: 'm_title', type: 'Text', name: 'Title', frame: { x: 0, y: 0, width: 320, height: 32 }, layout: { strategy: 'auto' }, text: { text: 'Banner title', style: { fontFamily: 'Inter', fontSize: 24, fontWeight: 700 } } },
-            { id: 'm_slot', type: 'Slot', name: 'children', frame: { x: 0, y: 0, width: 100, height: 100 }, layout: { strategy: 'auto' } },
+            {
+                id: 'm_title',
+                type: 'Text',
+                name: 'Title',
+                frame: { x: 0, y: 0, width: 320, height: 32 },
+                layout: { strategy: 'auto' },
+                text: { text: 'Banner title', style: { fontFamily: 'Inter', fontSize: 24, fontWeight: 700 } },
+            },
+            {
+                id: 'm_slot',
+                type: 'Slot',
+                name: 'children',
+                frame: { x: 0, y: 0, width: 100, height: 100 },
+                layout: { strategy: 'auto' },
+            },
         ],
     };
     const bannerInstance = {
@@ -115,7 +137,14 @@ function makeAstPreservedFixture(): typeof mockFramerDocument {
             master: masterBody,
         },
         children: [
-            { id: 'instance_title', type: 'Text', name: 'Title', frame: { x: 0, y: 0, width: 320, height: 32 }, layout: { strategy: 'auto' }, text: { text: 'Hero banner', style: { fontFamily: 'Inter', fontSize: 24, fontWeight: 700 } } },
+            {
+                id: 'instance_title',
+                type: 'Text',
+                name: 'Title',
+                frame: { x: 0, y: 0, width: 320, height: 32 },
+                layout: { strategy: 'auto' },
+                text: { text: 'Hero banner', style: { fontFamily: 'Inter', fontSize: 24, fontWeight: 700 } },
+            },
         ],
     };
     return {

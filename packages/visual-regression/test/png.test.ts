@@ -6,13 +6,18 @@
  * types the decoder supports.
  */
 
+import { deflateSync } from 'node:zlib';
+
 import { describe, expect, it } from 'vitest';
 
 import { decodePng, encodePng, resizeNearest } from '../src/compare/png';
 
 /** Build a raw PNG by hand: width×height, 8-bit RGBA, filter None per row. */
-function buildRgbaPng(width: number, height: number, pixel: (x: number, y: number) => [number, number, number, number]): Buffer {
-    const { deflateSync } = require('node:zlib');
+function buildRgbaPng(
+    width: number,
+    height: number,
+    pixel: (x: number, y: number) => [number, number, number, number],
+): Buffer {
     const stride = width * 4;
     const raw = Buffer.alloc((stride + 1) * height);
     for (let y = 0; y < height; y += 1) {
@@ -56,12 +61,7 @@ describe('decodePng', () => {
         const img = decodePng(png);
         expect(img.width).toBe(2);
         expect(img.height).toBe(2);
-        expect([...img.data]).toEqual([
-            255, 0, 0, 255,
-            0, 255, 0, 255,
-            0, 0, 255, 255,
-            255, 255, 255, 128,
-        ]);
+        expect([...img.data]).toEqual([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 128]);
     });
 
     it('rejects a non-PNG buffer', () => {

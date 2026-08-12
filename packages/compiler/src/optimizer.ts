@@ -38,7 +38,10 @@ export function optimizeDocument(document: DesignDocument, options: OptimizeOpti
     };
 
     if (options.extractComponents !== false) {
-        result = extractComponents(result, typeof options.extractComponents === 'object' ? options.extractComponents : undefined);
+        result = extractComponents(
+            result,
+            typeof options.extractComponents === 'object' ? options.extractComponents : undefined,
+        );
     }
 
     if (options.separateComponents !== false) {
@@ -52,9 +55,7 @@ export function optimizeDocument(document: DesignDocument, options: OptimizeOpti
 export function optimizeNode(node: DesignNode): DesignNode {
     return {
         ...node,
-        children: node.children
-            .map(optimizeNode)
-            .filter((child) => !isRedundantWrapper(child)),
+        children: node.children.map(optimizeNode).filter((child) => !isRedundantWrapper(child)),
     };
 }
 

@@ -14,12 +14,17 @@ import type { VirtualFile } from '../types';
  * generateProject; when omitted they derive from the root node names.
  */
 export function generateApp(document: DesignDocument, sectionNames?: string[]): VirtualFile {
-    const projectName = sanitizeComponentName(document.name || DEFAULT_PROJECT_NAME);
     const sections = sectionNames ?? document.nodes.map((node) => sanitizeComponentName(node.name));
     const sectionImports = sections
         .map((sectionName) => `import { ${sectionName} } from './sections/${sectionName}';`)
         .join('\n');
-    const sectionElements = sections.map((sectionName) => `            <${sectionName} />`).join('\n');
+    // Each section gets a stable anchor class (`section-<kebab-case>`). The
+    // generated sections MERGE a consumer className into their root element's
+    // baked-in classes, so this lands on the rendered root — usable for
+    // anchoring, scroll-margin styling, and per-section hooks.
+    const sectionElements = sections
+        .map((sectionName) => `            <${sectionName} className="${sectionClassName(sectionName)}" />`)
+        .join('\n');
 
     const content = `${sectionImports}
 
@@ -36,6 +41,16 @@ ${sectionElements}
         path: 'src/App.tsx',
         content,
     };
+}
+
+/** The anchor class for a section output name (`HeroImage` → `section-hero-image`). */
+function sectionClassName(sectionName: string): string {
+    const kebab = sectionName
+        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return `section-${kebab}`;
 }
 
 /**

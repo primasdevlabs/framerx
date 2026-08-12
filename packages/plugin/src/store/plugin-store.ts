@@ -21,33 +21,33 @@ export interface GeneratedFile {
 export type PluginMode = 'loading' | 'standalone' | 'framer';
 
 /** The export lifecycle state. */
-export type ExportStatus = 'idle' | 'compiling' | 'ready' | 'error';    /** A summary of a completed export. */
-    export interface ExportSummary {
-        name: string;
-        fileCount: number;
-        sectionCount: number;
-        componentCount: number;
-        zipBytes: number;
-        files: GeneratedFile[];
-        /** The compiler diagnostics (counts + validation warnings/errors). */
-        diagnostics?: {
-            nodes: number;
-            components: number;
-            componentsFromMasters: number;
-            componentsFromCode: number;
-            componentsSynthesized: number;
-            instances: number;
-            assetsDiscovered: number;
-            uniqueAssets: number;
-            warnings: Array<{ stage: string; path?: string; message: string }>;
-            errors: Array<{ stage: string; path?: string; message: string }>;
-        };
-        /**
-         * The live SDK key dump captured during this export run (framer mode
-         * only). Diagnostic — never shipped inside the project.
-         */
-        sdkProbe?: SdkKeyDump;
-    }
+export type ExportStatus = 'idle' | 'compiling' | 'ready' | 'error'; /** A summary of a completed export. */
+export interface ExportSummary {
+    name: string;
+    fileCount: number;
+    sectionCount: number;
+    componentCount: number;
+    zipBytes: number;
+    files: GeneratedFile[];
+    /** The compiler diagnostics (counts + validation warnings/errors). */
+    diagnostics?: {
+        nodes: number;
+        components: number;
+        componentsFromMasters: number;
+        componentsFromCode: number;
+        componentsSynthesized: number;
+        instances: number;
+        assetsDiscovered: number;
+        uniqueAssets: number;
+        warnings: Array<{ stage: string; path?: string; message: string }>;
+        errors: Array<{ stage: string; path?: string; message: string }>;
+    };
+    /**
+     * The live SDK key dump captured during this export run (framer mode
+     * only). Diagnostic — never shipped inside the project.
+     */
+    sdkProbe?: SdkKeyDump;
+}
 
 interface PluginState {
     /** How the plugin is running. */

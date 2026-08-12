@@ -45,7 +45,7 @@ describe('renderReferencePage', () => {
     it('preserves typography values (em letter-spacing, italic, transform)', () => {
         const html = renderReferencePage(fatFixtureDocument);
         expect(html).toContain('-0.02em');
-        expect(html).toContain("font-style: italic");
+        expect(html).toContain('font-style: italic');
         expect(html).toContain('text-transform: uppercase');
         expect(html).toContain('font-weight: 700');
     });
@@ -170,11 +170,79 @@ describe('nodeCss / typographyCss', () => {
         expect(cleared).toContainEqual({ property: 'background-image', value: 'none' });
     });
 
+    it('emits the base object-fit on standalone Image nodes (matching object-<fit>)', () => {
+        // The generated project stamps an `object-<fit>` Tailwind class on
+        // EVERY standalone <img> (default cover); the reference must carry
+        // the same object-fit or the base tier renders with the browser
+        // default (object-fit: fill) and disagrees with the generated page.
+        const img = nodeCss({
+            id: 'i',
+            type: 'Image',
+            name: 'I',
+            frame: { x: 0, y: 0, width: 100, height: 100 },
+            layout: { strategy: 'auto', sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+            style: {},
+            image: { src: 'https://cdn.test/a.png' },
+        });
+        expect(img).toContainEqual({ property: 'object-fit', value: 'cover' });
+
+        // Frames (background fills) never receive object-fit — the generated
+        // side handles those with background-size instead.
+        const frame = nodeCss({
+            id: 'f',
+            type: 'Frame',
+            name: 'F',
+            frame: { x: 0, y: 0, width: 100, height: 100 },
+            layout: { strategy: 'auto', sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+            style: { fills: [{ type: 'image', image: { src: 'https://cdn.test/a.png' } }] },
+        });
+        expect(frame.some((d) => d.property === 'object-fit')).toBe(false);
+    });
+
+    it('honors the source object-fit/object-position on the base Image tier', () => {
+        const img = nodeCss({
+            id: 'i',
+            type: 'Image',
+            name: 'I',
+            frame: { x: 0, y: 0, width: 100, height: 100 },
+            layout: { strategy: 'auto', sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+            style: {},
+            image: { src: 'https://cdn.test/a.png', objectFit: 'contain', objectPosition: 'center top' },
+        });
+        expect(img).toContainEqual({ property: 'object-fit', value: 'contain' });
+        expect(img).toContainEqual({ property: 'object-position', value: 'center top' });
+    });
+
+    it('lets a tier object-fit override win over the base declaration', () => {
+        // The responsive image-swap section runs LAST, so a tier's
+        // object-fit/position re-assertion beats the base declaration (the
+        // last declaration within the rule wins).
+        const img = nodeCssWithOverrides(
+            {
+                id: 'i',
+                type: 'Image',
+                name: 'I',
+                frame: { x: 0, y: 0, width: 100, height: 100 },
+                layout: { strategy: 'auto', sizing: { widthMode: 'fixed', heightMode: 'fixed' } },
+                style: {},
+                image: { src: 'https://cdn.test/a.png', objectFit: 'cover' },
+            },
+            { image: { src: 'https://cdn.test/b.png', objectFit: 'contain', objectPosition: 'center top' } },
+        );
+        const fits = img.filter((d) => d.property === 'object-fit');
+        expect(fits[fits.length - 1]).toEqual({ property: 'object-fit', value: 'contain' });
+        const positions = img.filter((d) => d.property === 'object-position');
+        expect(positions[positions.length - 1]).toEqual({ property: 'object-position', value: 'center top' });
+    });
+
     it('renders standalone image swaps as <picture><source media> with the img kept', () => {
         const html = renderReferencePage({
             id: 'doc_swap',
             name: 'Swap Doc',
-            breakpoints: [{ name: 'tablet', minWidth: 768 }, { name: 'desktop', minWidth: 1024 }],
+            breakpoints: [
+                { name: 'tablet', minWidth: 768 },
+                { name: 'desktop', minWidth: 1024 },
+            ],
             nodes: [
                 {
                     id: 'photo',

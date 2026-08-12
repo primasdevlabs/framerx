@@ -2,7 +2,14 @@
  * Framer node → Design AST node conversion.
  */
 
-import type { DesignImageNode, DesignNode, DesignNodeType, LayoutStyle, ResponsiveBehavior, ResponsiveOverride } from '@framer/compiler-ast';
+import type {
+    DesignImageNode,
+    DesignNode,
+    DesignNodeType,
+    LayoutStyle,
+    ResponsiveBehavior,
+    ResponsiveOverride,
+} from '@framer/compiler-ast';
 import type { Rect } from '@framer/compiler-shared';
 import { normalizeColor, stableId } from '@framer/compiler-shared';
 
@@ -97,13 +104,13 @@ export function parseNode(node: FramerNode, sharedMasters?: Map<FramerNode, Desi
                 pathData: node.vector?.pathData,
                 asset: node.vector?.src
                     ? {
-                        id: stableId('asset', node.vector.src),
-                        type: 'svg',
-                        src: node.vector.src,
-                        name: node.vector.name,
-                        mimeType: node.vector.mimeType,
-                        data: node.vector.data,
-                    }
+                          id: stableId('asset', node.vector.src),
+                          type: 'svg',
+                          src: node.vector.src,
+                          name: node.vector.name,
+                          mimeType: node.vector.mimeType,
+                          data: node.vector.data,
+                      }
                     : undefined,
             };
         case 'Component':
@@ -118,20 +125,20 @@ export function parseNode(node: FramerNode, sharedMasters?: Map<FramerNode, Desi
                 // verbatim as the true implementation.
                 metadata: node.component?.code
                     ? {
-                        ...base.metadata,
-                        custom: {
-                            ...(base.metadata.custom ?? {}),
-                            code: node.component.code,
-                        },
-                    }
+                          ...base.metadata,
+                          custom: {
+                              ...(base.metadata.custom ?? {}),
+                              code: node.component.code,
+                          },
+                      }
                     : base.metadata,
                 slots: node.component?.slots
                     ? Object.fromEntries(
-                        Object.entries(node.component.slots).map(([name, nodes]) => [
-                            name,
-                            nodes.map((child) => parseNode(child, sharedMasters)),
-                        ]),
-                    )
+                          Object.entries(node.component.slots).map(([name, nodes]) => [
+                              name,
+                              nodes.map((child) => parseNode(child, sharedMasters)),
+                          ]),
+                      )
                     : undefined,
                 // The master is the component's real definition body (slot
                 // placeholders at their true positions). The separation pass
@@ -140,9 +147,7 @@ export function parseNode(node: FramerNode, sharedMasters?: Map<FramerNode, Desi
                 // ONCE per document (shared across every instance of the
                 // component) and is marked as master-backed so the definition
                 // model can tell real masters from extraction templates.
-                template: node.component?.master
-                    ? parseSharedMaster(node.component.master, sharedMasters)
-                    : undefined,
+                template: node.component?.master ? parseSharedMaster(node.component.master, sharedMasters) : undefined,
             };
         case 'Slot': {
             // Per-slot props (the master's slot placeholder controls) survive
@@ -154,13 +159,13 @@ export function parseNode(node: FramerNode, sharedMasters?: Map<FramerNode, Desi
                 slotName: node.name,
                 metadata: slotProps
                     ? {
-                        sourceId: node.id,
-                        sourceType: node.type,
-                        custom: {
-                            ...(base.metadata.custom ?? {}),
-                            slotProps,
-                        },
-                    }
+                          sourceId: node.id,
+                          sourceType: node.type,
+                          custom: {
+                              ...(base.metadata.custom ?? {}),
+                              slotProps,
+                          },
+                      }
                     : base.metadata,
             };
         }
@@ -261,7 +266,8 @@ export function parseResponsive(responsive?: Record<string, FramerResponsiveOver
         // image + fit/position. `src: ''` removes the image at this tier.
         if (override.image) {
             parsed.image = { src: override.image.src };
-            if (override.image.objectFit) parsed.image.fit = override.image.objectFit as NonNullable<ResponsiveOverride['image']>['fit'];
+            if (override.image.objectFit)
+                parsed.image.fit = override.image.objectFit as NonNullable<ResponsiveOverride['image']>['fit'];
             if (override.image.objectPosition) parsed.image.position = override.image.objectPosition;
         }
         breakpoints[breakpointName] = parsed;

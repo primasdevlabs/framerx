@@ -13,3 +13,4 @@ demo-output
 .vr-out
 .vr-browser-test
 .vr-tmp
+.vr-build-smoke-test

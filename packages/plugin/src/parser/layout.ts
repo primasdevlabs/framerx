@@ -92,7 +92,11 @@ export function parseLayout(node: SdkNode): FramerLayout {
         // `gridColumnWidth` / `gridRowHeight` are per-axis fixed sizes in
         // pixels; preserved through to the DesignAST so the generator
         // can emit `grid-template-columns / rows: repeat(N, <size>px)`.
-        if (node.gridColumnWidth !== null && node.gridColumnWidth !== undefined && Number.isFinite(node.gridColumnWidth)) {
+        if (
+            node.gridColumnWidth !== null &&
+            node.gridColumnWidth !== undefined &&
+            Number.isFinite(node.gridColumnWidth)
+        ) {
             layout.columnWidth = node.gridColumnWidth;
         }
         if (node.gridRowHeight !== null && node.gridRowHeight !== undefined && Number.isFinite(node.gridRowHeight)) {
@@ -118,7 +122,12 @@ export function parseLayout(node: SdkNode): FramerLayout {
         right: parsePx(node.right),
         bottom: parsePx(node.bottom),
     };
-    if (offsets.left !== undefined || offsets.top !== undefined || offsets.right !== undefined || offsets.bottom !== undefined) {
+    if (
+        offsets.left !== undefined ||
+        offsets.top !== undefined ||
+        offsets.right !== undefined ||
+        offsets.bottom !== undefined
+    ) {
         layout.offsets = offsets;
     }
     layout.zIndex = node.zIndex ?? undefined;

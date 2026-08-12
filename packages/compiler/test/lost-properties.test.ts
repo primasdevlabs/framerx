@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { collectCoverage, SOURCE_PROPERTIES } from '../src/coverage';
 import { compileFramerDocument } from '../src/index';
 import { parseFramerDocument } from '@framer/compiler-parser';
-import type { DesignDocument, DesignNode, FramerDocument, FramerInteraction, FramerNode } from '@framer/compiler-parser';
+import type { DesignNode, FramerDocument, FramerInteraction, FramerNode } from '@framer/compiler-parser';
 
 const PROPERTY_IDS = ['text.italic', 'animation.tap', 'component.props'] as const;
 
@@ -152,7 +152,9 @@ describe('component.props — preserved + emitted as JSX', () => {
     it('appears as JSX attribute names on the rendered component', async () => {
         const result = await compileFramerDocument(makeLostPropertiesFixture(), { projectName: 'props' });
         // The component definition file lands in src/components/PrimaryButton.tsx
-        const componentFile = result.files.find((f) => f.path.startsWith('src/components/PrimaryButton') && f.path.endsWith('.tsx'));
+        const componentFile = result.files.find(
+            (f) => f.path.startsWith('src/components/PrimaryButton') && f.path.endsWith('.tsx'),
+        );
         expect(componentFile).toBeDefined();
         const content = componentFile?.content ?? '';
         // Props become destructured argument types / destructured bindings in the impl.

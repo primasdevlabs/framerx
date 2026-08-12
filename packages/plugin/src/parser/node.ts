@@ -9,18 +9,32 @@
 import type { FramerInteraction, FramerNode } from '@framer/compiler-parser';
 
 import { matchCodeFile, resolveCodeClosure, type CodeFileIndex } from './code-files';
-import { isModuleBacked, moduleExportName, moduleUrlOf, resolveModuleClosure, type ModuleClosure, type ModuleTextFetcher } from './modules';
+import {
+    isModuleBacked,
+    moduleExportName,
+    moduleUrlOf,
+    resolveModuleClosure,
+    type ModuleClosure,
+    type ModuleTextFetcher,
+} from './modules';
 import { parseLayout } from './layout';
+import { SDK_CALL_TIMEOUT_MS, withTimeout } from './sdk';
 import type { SdkImageAsset, SdkNode } from './sdk-types';
-import { getSdkImageUrl, isSdkComponentNode, isSdkImageNode, isSdkSlotNode, isSdkTextNode, isSdkVectorNode, normalizeSlotName } from './sdk-types';
+import {
+    getSdkImageUrl,
+    isSdkComponentNode,
+    isSdkImageNode,
+    isSdkSlotNode,
+    isSdkTextNode,
+    isSdkVectorNode,
+    normalizeSlotName,
+} from './sdk-types';
 import { parseStyle } from './style';
 import { parseText } from './typography';
 
 /** The outcome of resolving one image asset's ORIGINAL bytes. */
 export type ImageResolution =
-    | { kind: 'resolved' }
-    | { kind: 'unavailable'; url?: string }
-    | { kind: 'failed'; url?: string; error: string };
+    { kind: 'resolved' } | { kind: 'unavailable'; url?: string } | { kind: 'failed'; url?: string; error: string };
 
 /**
  * Per-asset image resolution outcomes, keyed by the asset id (or the asset
@@ -116,6 +130,13 @@ export interface ParseContext {
      */
     imageGetDataSeen?: boolean;
     imageGetDataAvailable?: boolean;
+    /**
+     * How long a single SDK call may take before it is treated as a hang and
+     * degrades like a throw (defaults to `SDK_CALL_TIMEOUT_MS`). The document
+     * extraction threads its injectable value through so tests can verify the
+     * timeout path without waiting 10s.
+     */
+    sdkCallTimeoutMs?: number;
 }
 
 /** Map an SDK node to its Framer node type string. */
@@ -158,10 +179,14 @@ function parseInteractions(node: SdkNode): FramerInteraction[] | undefined {
  * A single node whose rect cannot be read must never abort the whole document
  * extraction — it degrades to its width/height attributes, or zeros.
  */
-async function parseFrame(node: SdkNode): Promise<{ x: number; y: number; width: number; height: number }> {
+async function parseFrame(
+    node: SdkNode,
+    context: ParseContext,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+    const callTimeout = context.sdkCallTimeoutMs ?? SDK_CALL_TIMEOUT_MS;
     let rect: { x: number; y: number; width: number; height: number } | null = null;
     try {
-        rect = await node.getRect();
+        rect = await withTimeout(node.getRect(), callTimeout, 'getRect');
     } catch {
         rect = null;
     }
@@ -242,8 +267,9 @@ async function resolveSdkImageBytes(sdkImage: SdkImageAsset, context: ParseConte
         recordImageResolution(sdkImage, context, { kind: 'resolved' });
         return;
     }
+    const callTimeout = context.sdkCallTimeoutMs ?? SDK_CALL_TIMEOUT_MS;
     try {
-        const result = await sdkImage.getData();
+        const result = await withTimeout(sdkImage.getData(), callTimeout, 'ImageAsset.getData()');
         if (result && result.bytes && result.bytes.byteLength > 0) {
             sdkImage.data = result.bytes;
             if (result.mimeType) sdkImage.mimeType = result.mimeType;
@@ -260,7 +286,10 @@ async function resolveSdkImageBytes(sdkImage: SdkImageAsset, context: ParseConte
             url: sdkImage.url ?? sdkImage.src,
             error: error instanceof Error ? error.message : String(error),
         });
-        console.warn('[framerx] image getData failed; falling back to URL fetch', error instanceof Error ? error.message : error);
+        console.warn(
+            '[framerx] image getData failed; falling back to URL fetch',
+            error instanceof Error ? error.message : error,
+        );
     }
 }
 
@@ -274,7 +303,12 @@ async function resolveSdkImageBytes(sdkImage: SdkImageAsset, context: ParseConte
  * primary node they derive from — so the fold pass can attach their
  * overrides to the primary instead of emitting them as duplicated content.
  */
-export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, breakpointName?: string): Promise<FramerNode> {
+export async function parseSdkNode(
+    node: SdkNode,
+    context: ParseContext = {},
+    breakpointName?: string,
+): Promise<FramerNode> {
+    const callTimeout = context.sdkCallTimeoutMs ?? SDK_CALL_TIMEOUT_MS;
     // Original image bytes first: `getData()` (raw bytes + MIME) beats a URL
     // fetch / canvas re-encode. Runs before `base` is built so parseStyle and
     // the image branch read the resolved bytes.
@@ -295,7 +329,7 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
         id: node.id,
         type,
         name: type === 'Slot' ? normalizeSlotName(node.name) : (node.name ?? 'Untitled'),
-        frame: await parseFrame(node),
+        frame: await parseFrame(node, context),
         layout: parseLayout(node),
         style: parseStyle(node),
         source: {
@@ -323,7 +357,7 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
         // the master-authored placeholder renders faithfully.
         const slotProps = extractProps(node.controls);
         if (slotProps) base.props = slotProps;
-        const defaultChildren = await safeChildren(node);
+        const defaultChildren = await safeChildren(node, context);
         if (defaultChildren.length > 0) {
             base.children = await Promise.all(defaultChildren.map((child) => safeParseNode(child, context)));
         }
@@ -341,7 +375,7 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
     if (isSdkTextNode(node)) {
         base.text = parseText(node);
         try {
-            const text = await node.getText?.();
+            const text = await withTimeout(node.getText?.() ?? Promise.resolve(null), callTimeout, 'getText');
             if (text !== null && text !== undefined) base.text.text = text;
         } catch (error) {
             // The engine rejected the text read (e.g. "node is not a text
@@ -349,7 +383,12 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
             // children still load instead of becoming a phantom text node or
             // failing the whole extraction. Logged so the offending node is
             // diagnosable.
-            console.warn('[framerx] text read rejected for node', node.id, node.name, error instanceof Error ? error.message : error);
+            console.warn(
+                '[framerx] text read rejected for node',
+                node.id,
+                node.name,
+                error instanceof Error ? error.message : error,
+            );
             type = 'Frame';
             base.type = type;
             base.name = node.name ?? 'Untitled';
@@ -359,14 +398,14 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
         let svg = node.svg;
         if (!svg && typeof node.getSVG === 'function') {
             try {
-                svg = (await node.getSVG()) ?? undefined;
+                svg = (await withTimeout(node.getSVG(), callTimeout, 'getSVG')) ?? undefined;
             } catch {
                 // soft fallback
             }
         }
         if (!svg && typeof node.getSvg === 'function') {
             try {
-                svg = (await node.getSvg()) ?? undefined;
+                svg = (await withTimeout(node.getSvg(), callTimeout, 'getSvg')) ?? undefined;
             } catch {
                 // soft fallback
             }
@@ -392,14 +431,12 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
         // internal identifiers that differ from the instance's). The master
         // root never resolves itself (that would recurse forever), and masters
         // currently being parsed are skipped (mutual recursion guard).
-        const selfOrInProgress =
-            node.id === context.masterRoot ||
-            (context.parsingMasters?.has(component.id) ?? false);
+        const selfOrInProgress = node.id === context.masterRoot || (context.parsingMasters?.has(component.id) ?? false);
         const master = selfOrInProgress
             ? undefined
-            : context.masters?.get(component.id) ??
+            : (context.masters?.get(component.id) ??
               (node.insertURL ? context.masters?.get(node.insertURL) : undefined) ??
-              (node.componentName ? context.mastersByName?.get(node.componentName) : undefined);
+              (node.componentName ? context.mastersByName?.get(node.componentName) : undefined));
         if (master) {
             let parsed = context.parsedMasters?.get(component.id);
             if (!parsed) {
@@ -416,7 +453,10 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
             const codeFiles = context.codeFiles;
             let codeMatch: ReturnType<typeof matchCodeFile>;
             if (codeFiles) {
-                codeMatch = matchCodeFile({ id: component.id, name: component.name, insertURL: node.insertURL }, codeFiles);
+                codeMatch = matchCodeFile(
+                    { id: component.id, name: component.name, insertURL: node.insertURL },
+                    codeFiles,
+                );
                 if (codeMatch) {
                     component.code = {
                         source: codeMatch.file.content,
@@ -479,18 +519,19 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
         base.component = component;
     }
 
-    const children = await safeChildren(node);
+    const children = await safeChildren(node, context);
     if (children.length > 0) {
         base.children = await Promise.all(children.map((child) => safeParseNode(child, context, childBreakpointName)));
     }
 
     const imageUrl = getSdkImageUrl(node);
     if (imageUrl && (base.children?.length ?? 0) === 0) {
-        const imageMeta = typeof node.image === 'object'
-            ? node.image
-            : typeof node.backgroundImage === 'object'
-                ? node.backgroundImage
-                : undefined;
+        const imageMeta =
+            typeof node.image === 'object'
+                ? node.image
+                : typeof node.backgroundImage === 'object'
+                  ? node.backgroundImage
+                  : undefined;
         base.image = {
             src: imageUrl,
             alt: imageMeta?.altText,
@@ -512,9 +553,10 @@ export async function parseSdkNode(node: SdkNode, context: ParseContext = {}, br
  * Read a node's children defensively — a subtree the SDK cannot walk must not
  * abort the whole document extraction (the node keeps its own attributes).
  */
-async function safeChildren(node: SdkNode): Promise<SdkNode[]> {
+async function safeChildren(node: SdkNode, context: ParseContext): Promise<SdkNode[]> {
+    const callTimeout = context.sdkCallTimeoutMs ?? SDK_CALL_TIMEOUT_MS;
     try {
-        return await node.getChildren();
+        return await withTimeout(node.getChildren(), callTimeout, `getChildren(${node.id})`);
     } catch {
         return [];
     }
@@ -528,11 +570,20 @@ async function safeChildren(node: SdkNode): Promise<SdkNode[]> {
  * extraction must continue with the remaining nodes. The failure is logged so
  * the offending node is diagnosable.
  */
-export async function safeParseNode(node: SdkNode, context: ParseContext, breakpointName?: string): Promise<FramerNode> {
+export async function safeParseNode(
+    node: SdkNode,
+    context: ParseContext,
+    breakpointName?: string,
+): Promise<FramerNode> {
     try {
         return await parseSdkNode(node, context, breakpointName);
     } catch (error) {
-        console.warn('[framerx] failed to parse node', node.id, node.name, error instanceof Error ? error.message : error);
+        console.warn(
+            '[framerx] failed to parse node',
+            node.id,
+            node.name,
+            error instanceof Error ? error.message : error,
+        );
         return {
             id: node.id,
             type: 'Frame',

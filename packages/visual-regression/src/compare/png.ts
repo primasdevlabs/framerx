@@ -117,12 +117,7 @@ export function decodePng(buffer: Buffer | Uint8Array): RgbaImage {
 }
 
 /** Apply one of the five PNG filter types to a scanline, in place. */
-function unfilter(
-    filter: number,
-    scanline: Uint8Array,
-    prev: Uint8Array,
-    channels: number,
-): void {
+function unfilter(filter: number, scanline: Uint8Array, prev: Uint8Array, channels: number): void {
     switch (filter) {
         case 0: // None
             return;
@@ -190,11 +185,7 @@ export function encodePng(image: RgbaImage): Buffer {
 
     const idat = deflateSync(raw, { level: 9 });
 
-    const chunks = [
-        chunk('IHDR', ihdr),
-        chunk('IDAT', idat),
-        chunk('IEND', Buffer.alloc(0)),
-    ];
+    const chunks = [chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))];
     return Buffer.concat([PNG_SIGNATURE, ...chunks]);
 }
 

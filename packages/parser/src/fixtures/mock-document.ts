@@ -41,26 +41,27 @@ const heroFrame: FramerNode = {
             name: 'Heading',
             frame: { x: 24, y: 200, width: 700, height: 96 },
             layout: { strategy: 'auto' },
-            style: {},                text: {
-                    text: 'Build Production-Ready Apps',
-                    style: {
-                        fontFamily: 'Inter',
-                        fontSize: 64,
-                        fontWeight: 700,
-                        lineHeight: 1.1,
-                        color: '#ffffff',
-                        textAlign: 'center',
-                    },
+            style: {},
+            text: {
+                text: 'Build Production-Ready Apps',
+                style: {
+                    fontFamily: 'Inter',
+                    fontSize: 64,
+                    fontWeight: 700,
+                    lineHeight: 1.1,
+                    color: '#ffffff',
+                    textAlign: 'center',
                 },
-                // Responsive: the headline scales down at the tablet tier.
-                responsive: {
-                    tablet: {
-                        style: {
-                            fontSize: 48,
-                        },
+            },
+            // Responsive: the headline scales down at the tablet tier.
+            responsive: {
+                tablet: {
+                    style: {
+                        fontSize: 48,
                     },
                 },
             },
+        },
         {
             id: 'text_subheading',
             type: 'Text',
@@ -351,7 +352,19 @@ const animatedFrame: FramerNode = {
         sizing: { widthMode: 'fill', heightMode: 'fixed' },
     },
     style: {
-        fills: [{ type: 'linear', gradient: { angle: 135, stops: [{ position: 0, color: '#6366f1' }, { position: 1, color: '#8b5cf6' }] }, visible: true }],
+        fills: [
+            {
+                type: 'linear',
+                gradient: {
+                    angle: 135,
+                    stops: [
+                        { position: 0, color: '#6366f1' },
+                        { position: 1, color: '#8b5cf6' },
+                    ],
+                },
+                visible: true,
+            },
+        ],
     },
     interactions: [
         {
@@ -480,14 +493,37 @@ const testimonialsSection: FramerNode = {
         fills: [{ type: 'solid', color: '#eef2f7', visible: true }],
     },
     children: [
-        testimonialCard('frame_testimonial_1', 80, 'FramerX turned our design handoff into a one-click build.', 'Sarah Chen, Design Lead'),
-        testimonialCard('frame_testimonial_2', 484, 'The generated code reads like our team wrote it by hand.', 'Marcus Rivera, Staff Engineer'),
-        testimonialCard('frame_testimonial_3', 888, 'We shipped our redesign a week early thanks to this compiler.', 'Aiko Tanaka, Product Manager'),
+        testimonialCard(
+            'frame_testimonial_1',
+            80,
+            'FramerX turned our design handoff into a one-click build.',
+            'Sarah Chen, Design Lead',
+        ),
+        testimonialCard(
+            'frame_testimonial_2',
+            484,
+            'The generated code reads like our team wrote it by hand.',
+            'Marcus Rivera, Staff Engineer',
+        ),
+        testimonialCard(
+            'frame_testimonial_3',
+            888,
+            'We shipped our redesign a week early thanks to this compiler.',
+            'Aiko Tanaka, Product Manager',
+        ),
     ],
 };
 
 /** A single stat card — repeated subtrees differing in accent color, size, radius, and text. */
-function statCard(id: string, x: number, width: number, radius: number, accent: string, value: string, label: string): FramerNode {
+function statCard(
+    id: string,
+    x: number,
+    width: number,
+    radius: number,
+    accent: string,
+    value: string,
+    label: string,
+): FramerNode {
     return {
         id,
         type: 'Frame',
@@ -601,7 +637,13 @@ const metricsSection: FramerNode = {
 };
 
 /** A single gradient card — repeated subtrees differing in gradient stops/angle. */
-function gradientCard(id: string, x: number, angle: number, stops: { position: number; color: string }[], label: string): FramerNode {
+function gradientCard(
+    id: string,
+    x: number,
+    angle: number,
+    stops: { position: number; color: string }[],
+    label: string,
+): FramerNode {
     return {
         id,
         type: 'Frame',
@@ -679,21 +721,39 @@ const gradientsSection: FramerNode = {
         fills: [{ type: 'solid', color: '#f8fafc', visible: true }],
     },
     children: [
-        gradientCard('frame_gradient_1', 80, 135, [
-            { position: 0, color: '#6366f1' },
-            { position: 1, color: '#8b5cf6' },
-        ], 'Indigo to Violet'),
+        gradientCard(
+            'frame_gradient_1',
+            80,
+            135,
+            [
+                { position: 0, color: '#6366f1' },
+                { position: 1, color: '#8b5cf6' },
+            ],
+            'Indigo to Violet',
+        ),
         // A three-stop gradient with a non-even middle stop exercises exact
         // position fidelity through the extracted gradient prop.
-        gradientCard('frame_gradient_2', 484, 90, [
-            { position: 0, color: '#0ea5e9' },
-            { position: 0.25, color: '#ffffff' },
-            { position: 1, color: '#10b981' },
-        ], 'Sky to Emerald'),
-        gradientCard('frame_gradient_3', 888, 45, [
-            { position: 0, color: '#3b82f6' },
-            { position: 1, color: '#0ea5e9' },
-        ], 'Blue to Sky'),
+        gradientCard(
+            'frame_gradient_2',
+            484,
+            90,
+            [
+                { position: 0, color: '#0ea5e9' },
+                { position: 0.25, color: '#ffffff' },
+                { position: 1, color: '#10b981' },
+            ],
+            'Sky to Emerald',
+        ),
+        gradientCard(
+            'frame_gradient_3',
+            888,
+            45,
+            [
+                { position: 0, color: '#3b82f6' },
+                { position: 1, color: '#0ea5e9' },
+            ],
+            'Blue to Sky',
+        ),
     ],
 };
 

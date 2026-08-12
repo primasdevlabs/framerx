@@ -9,7 +9,14 @@ import { normalizeColor, pxToTailwindSpacing, sanitizeComponentName, toVariableN
 import { collectBodySlots, propTypeToTs, slotPropName } from '../components/model';
 import { generateMotionProps, type MotionProps } from '../motion/animation';
 import { generateClasses } from '../tailwind/classes';
-import { COLOR_STYLE_FIELDS, NUMERIC_TOKEN_FIELDS, NUMERIC_TOKEN_MODULES, collectTemplateColorProps, collectTemplateGradientProps, collectTemplateNumericProps } from '../tailwind/tokens';
+import {
+    COLOR_STYLE_FIELDS,
+    NUMERIC_TOKEN_FIELDS,
+    NUMERIC_TOKEN_MODULES,
+    collectTemplateColorProps,
+    collectTemplateGradientProps,
+    collectTemplateNumericProps,
+} from '../tailwind/tokens';
 import type { DesignTokens } from '../tailwind/tokens';
 import type { GenerationWarning, VirtualFile } from '../types';
 
@@ -112,8 +119,19 @@ export function generateComponent(node: DesignNode, options: ComponentOptions = 
     // they fall back to literals and the imports would be unused.
     const instanceModules = options.tokens ? collectInstanceTokenModules(body) : new Set<string>();
     const tokenValues = ['colors', 'radii', 'spacing'].filter((module) => instanceModules.has(module));
-    const tokenTypes = ['ColorValue', 'RadiusValue', 'SpacingValue', 'GradientValue'].filter((type) => markers.some((marker) => marker.type === type));
-    const imports = buildImports(hasMotion, hasExit, hasSlots, componentRefs, tokenValues, tokenTypes, options.importPrefix ?? './', options.codeImports);
+    const tokenTypes = ['ColorValue', 'RadiusValue', 'SpacingValue', 'GradientValue'].filter((type) =>
+        markers.some((marker) => marker.type === type),
+    );
+    const imports = buildImports(
+        hasMotion,
+        hasExit,
+        hasSlots,
+        componentRefs,
+        tokenValues,
+        tokenTypes,
+        options.importPrefix ?? './',
+        options.codeImports,
+    );
     const renderOptions: RenderOptions = {
         ...options,
         variantData,
@@ -131,6 +149,10 @@ export function generateComponent(node: DesignNode, options: ComponentOptions = 
     // them and an unused destructured variable fails the generated project's
     // strict build.
     const instanceOnly = new Set(definition?.instanceProps ?? []);
+    // A leaf-root component (image/text/vector) renders its OWN element with
+    // the classes baked in. The consumer `className` is destructured like any
+    // other prop and MERGED into that element (see renderElement), so it is
+    // never an unused variable.
     const destructuredProps = buildDestructuredProps(
         markers.filter((marker) => !instanceOnly.has(marker.name)).map((marker) => marker.name),
         slotProps,
@@ -138,9 +160,13 @@ export function generateComponent(node: DesignNode, options: ComponentOptions = 
     );
 
     const content = `${imports}
-${variantDecls ? `${variantDecls}
+${
+    variantDecls
+        ? `${variantDecls}
 
-` : ''}interface ${componentName}Props {
+`
+        : ''
+}interface ${componentName}Props {
     className?: string;
     ${props}
 }
@@ -248,7 +274,9 @@ function buildImports(
         if (code) {
             // Code components live in their own files and may be default
             // exports — the import form follows the module's actual export.
-            imports.push(code.isDefault ? `import ${ref} from '${code.spec}';` : `import { ${ref} } from '${code.spec}';`);
+            imports.push(
+                code.isDefault ? `import ${ref} from '${code.spec}';` : `import { ${ref} } from '${code.spec}';`,
+            );
         } else {
             imports.push(`import { ${ref} } from '${importPrefix}${ref}';`);
         }
@@ -339,7 +367,11 @@ function buildProps(node: DesignNode, propMarkers: PropMarker[], slotProps: stri
 }
 
 /** Build the function-parameter destructuring for a component. */
-function buildDestructuredProps(propNames: string[], slotProps: string[], variantDefaults: Record<string, string>): string {
+function buildDestructuredProps(
+    propNames: string[],
+    slotProps: string[],
+    variantDefaults: Record<string, string>,
+): string {
     const parts = ['className'];
     for (const name of propNames) {
         parts.push(variantDefaults[name] !== undefined ? `${name} = '${variantDefaults[name]}'` : name);
@@ -391,11 +423,18 @@ function collectPropMarkers(node: DesignNode): { markers: PropMarker[]; variantD
                     seen.add(name);
                     markers.push({
                         name,
-                        type: field === 'gradient' ? 'GradientValue'
-                            : COLOR_STYLE_FIELDS.has(field) ? 'ColorValue'
-                            : field === 'radius' ? 'RadiusValue'
-                            : NUMERIC_TOKEN_FIELDS.has(field) ? 'SpacingValue'
-                            : NUMERIC_STYLE_FIELDS.has(field) ? 'number' : 'string',
+                        type:
+                            field === 'gradient'
+                                ? 'GradientValue'
+                                : COLOR_STYLE_FIELDS.has(field)
+                                  ? 'ColorValue'
+                                  : field === 'radius'
+                                    ? 'RadiusValue'
+                                    : NUMERIC_TOKEN_FIELDS.has(field)
+                                      ? 'SpacingValue'
+                                      : NUMERIC_STYLE_FIELDS.has(field)
+                                        ? 'number'
+                                        : 'string',
                     });
                 }
             }
@@ -407,7 +446,8 @@ function collectPropMarkers(node: DesignNode): { markers: PropMarker[]; variantD
             if (!seen.has(name)) {
                 // Type the prop as a union of the actual variant values so
                 // invalid variants are compile errors.
-                const type = marker.values.length > 0 ? marker.values.map((value) => `'${value}'`).join(' | ') : 'string';
+                const type =
+                    marker.values.length > 0 ? marker.values.map((value) => `'${value}'`).join(' | ') : 'string';
                 markers.push({ name, type });
                 seen.add(name);
             }
@@ -448,7 +488,10 @@ interface VariantRenderData {
 }
 
 /** Compute the common and per-variant class sets for a variant-marked node. */
-function buildVariantData(node: DesignNode, tokens?: DesignTokens): { common: string; variants: Record<string, string>; backgrounds: Record<string, string> } {
+function buildVariantData(
+    node: DesignNode,
+    tokens?: DesignTokens,
+): { common: string; variants: Record<string, string>; backgrounds: Record<string, string> } {
     const marker = node.metadata?.custom?.variant as VariantMarker | undefined;
     if (!marker || marker.members.length === 0) {
         return { common: '', variants: {}, backgrounds: {} };
@@ -465,7 +508,9 @@ function buildVariantData(node: DesignNode, tokens?: DesignTokens): { common: st
         }
     }
     const first = marker.values[0];
-    const common = classes[first].filter((candidate) => marker.values.every((value) => classes[value].includes(candidate)));
+    const common = classes[first].filter((candidate) =>
+        marker.values.every((value) => classes[value].includes(candidate)),
+    );
     const commonSet = new Set(common);
     const variants: Record<string, string> = {};
     for (const value of marker.values) {
@@ -543,9 +588,10 @@ function gradientBackground(fill: Fill, tokens?: DesignTokens): string {
         if (color) hasRefs = true;
     }
     const stopsText = stops.join(', ');
-    const fn = fill.type === 'linear'
-        ? `linear-gradient(${fill.angle}deg, ${stopsText})`
-        : `radial-gradient(circle at ${Math.round(fill.center.x * 100)}% ${Math.round(fill.center.y * 100)}%, ${stopsText})`;
+    const fn =
+        fill.type === 'linear'
+            ? `linear-gradient(${fill.angle}deg, ${stopsText})`
+            : `radial-gradient(circle at ${Math.round(fill.center.x * 100)}% ${Math.round(fill.center.y * 100)}%, ${stopsText})`;
     return hasRefs ? `\`${fn}\`` : `'${fn}'`;
 }
 
@@ -570,7 +616,12 @@ function escapeInlineString(value: string): string {
  * classes cannot express). Variant-marked nodes instead switch backgrounds
  * per-variant via their `variantBackgroundMap` record.
  */
-function renderStyleAttrs(node: DesignNode, tokens?: DesignTokens, variant?: VariantRenderData, assetPaths?: ReadonlyMap<string, string>): string {
+function renderStyleAttrs(
+    node: DesignNode,
+    tokens?: DesignTokens,
+    variant?: VariantRenderData,
+    assetPaths?: ReadonlyMap<string, string>,
+): string {
     const entries: string[] = [];
     if (variant) {
         if (Object.keys(variant.backgrounds).length > 0) {
@@ -578,27 +629,39 @@ function renderStyleAttrs(node: DesignNode, tokens?: DesignTokens, variant?: Var
         }
     } else {
         const styleProps = node.metadata?.custom?.styleProps;
-        const gradientProp = styleProps && typeof styleProps === 'object'
-            ? (styleProps as Record<string, unknown>)['gradient']
-            : undefined;
+        const gradientProp =
+            styleProps && typeof styleProps === 'object'
+                ? (styleProps as Record<string, unknown>)['gradient']
+                : undefined;
         if (typeof gradientProp === 'string') {
             // Prop-driven gradient: render the CSS from the prop value. The
             // gradient function matches the template's fill type (members in a
             // gradient-slot group always share the fill type). The ternary
             // guards the optional prop (and narrows it) so the generated code
             // compiles under strict null checks.
-            entries.push(`background: ${gradientProp} ? ${gradientFromProp(gradientProp, node.style.fills?.[0])} : undefined`);
+            entries.push(
+                `background: ${gradientProp} ? ${gradientFromProp(gradientProp, node.style.fills?.[0])} : undefined`,
+            );
         } else {
             const fill = node.style.fills?.[0];
             if (fill && fill.type !== 'solid') {
                 if (fill.type === 'image') {
-                    // Image fill → CSS background-image. Resolved through the
-                    // asset registry so the reference always points at a real
-                    // file inside the project.
-                    const imgSrc = imageFillSrc(fill.image, assetPaths);
-                    entries.push(`backgroundImage: \`url('${imgSrc}')\``);
-                    entries.push(`backgroundSize: 'cover'`);
-                    entries.push(`backgroundPosition: '${fill.image.objectPosition ?? 'center'}'`);
+                    // A responsive image-fill swap overrides `background-image`
+                    // per tier in responsive.css — but an INLINE base style
+                    // would beat every stylesheet rule (inline > class, no
+                    // matter the cascade), so the swap would never apply. When
+                    // the frame carries image overrides, the base fill is
+                    // emitted as a base-tier rule by generateResponsiveCss
+                    // instead of inline (the reference renderer does the same).
+                    if (!hasResponsiveImageOverrides(node)) {
+                        // Image fill → CSS background-image. Resolved through
+                        // the asset registry so the reference always points at
+                        // a real file inside the project.
+                        const imgSrc = imageFillSrc(fill.image, assetPaths);
+                        entries.push(`backgroundImage: \`url('${imgSrc}')\``);
+                        entries.push(`backgroundSize: 'cover'`);
+                        entries.push(`backgroundPosition: '${fill.image.objectPosition ?? 'center'}'`);
+                    }
                 } else {
                     entries.push(`background: ${gradientBackground(fill, tokens)}`);
                 }
@@ -697,6 +760,12 @@ interface RenderOptions {
     assetPaths?: ReadonlyMap<string, string>;
     /** The document's breakpoints (name → min-width) for `<source media>` tiers. */
     breakpoints?: ReadonlyMap<string, number>;
+    /**
+     * Whether a consumer-passed `className` prop must be MERGED into the
+     * element's baked-in classes (leaf-root components only — they have no
+     * wrapper element of their own to receive the prop).
+     */
+    mergeConsumerClassName?: boolean;
     /** Original component name → deduplicated output name. */
     componentNameMap?: ReadonlyMap<string, string>;
     /** componentId → definition (slot names + output names for instances). */
@@ -715,11 +784,36 @@ function renderNode(node: DesignNode, options: RenderOptions): string {
 
     switch (node.type) {
         case 'text':
-            return renderTextNode(node, className, options.tokens, hasMotion, motionProps, options.assetPaths);
+            return renderTextNode(
+                node,
+                className,
+                options.tokens,
+                hasMotion,
+                motionProps,
+                options.assetPaths,
+                options.mergeConsumerClassName,
+            );
         case 'image':
-            return renderImageNode(node, className, options.tokens, hasMotion, motionProps, options.assetPaths, options.breakpoints);
+            return renderImageNode(
+                node,
+                className,
+                options.tokens,
+                hasMotion,
+                motionProps,
+                options.assetPaths,
+                options.breakpoints,
+                options.mergeConsumerClassName,
+            );
         case 'vector':
-            return renderVectorNode(node, className, options.tokens, hasMotion, motionProps, options.assetPaths);
+            return renderVectorNode(
+                node,
+                className,
+                options.tokens,
+                hasMotion,
+                motionProps,
+                options.assetPaths,
+                options.mergeConsumerClassName,
+            );
         case 'component':
             return renderComponentNode(node, className, options);
         case 'slot': {
@@ -740,6 +834,18 @@ function renderNode(node: DesignNode, options: RenderOptions): string {
     }
 }
 
+/**
+ * A className attribute that MERGES the consumer-passed `className` prop into
+ * the element's baked-in classes (instead of replacing them). Leaf-root
+ * components (image/text/vector) have no wrapper element of their own, so the
+ * prop must land on their own element — and its classes must survive. When
+ * there are no baked classes the prop is passed through directly.
+ */
+function renderMergedClassAttr(classes: string): string {
+    if (!classes) return 'className={className}';
+    return `className={\`${classes}\${className ? \` \${className}\` : ''}\`}`;
+}
+
 /** Render a text node as JSX. */
 function renderTextNode(
     node: DesignNode,
@@ -748,17 +854,19 @@ function renderTextNode(
     hasMotion?: boolean,
     motionProps?: MotionProps,
     assetPaths?: ReadonlyMap<string, string>,
+    mergeConsumerClassName?: boolean,
 ): string {
     if (node.type !== 'text') return '';
     const baseTag = node.text.style.fontSize !== undefined && node.text.style.fontSize >= 32 ? 'h2' : 'p';
     const tag = hasMotion ? `motion.${baseTag}` : baseTag;
     const motionAttrs = hasMotion ? formatMotionAttrs(motionProps) : '';
     const styleAttrs = renderStyleAttrs(node, tokens, undefined, assetPaths);
+    const classAttr = mergeConsumerClassName ? renderMergedClassAttr(className) : `className="${className}"`;
 
     // Template-driven text renders a prop interpolation instead of static text.
     const prop = node.metadata?.custom?.prop;
     const content = typeof prop === 'string' ? `{${prop}}` : escapeJsx(node.text.text);
-    return `<${tag} className="${className}"${styleAttrs}${motionAttrs}>${content}</${tag}>`;
+    return `<${tag} ${classAttr}${styleAttrs}${motionAttrs}>${content}</${tag}>`;
 }
 
 /**
@@ -769,38 +877,59 @@ function renderTextNode(
  * data → the remote URL as a runtime reference (reported as a warning by the
  * validator).
  */
-function imageAssetSrc(asset: import('@framer/compiler-ast').AssetRef, assetPaths?: ReadonlyMap<string, string>): string {
+function imageAssetSrc(
+    asset: import('@framer/compiler-ast').AssetRef,
+    assetPaths?: ReadonlyMap<string, string>,
+): string {
     const resolved = assetPaths?.get(asset.src);
     if (resolved) return toReferencePath(resolved);
     if (asset.data) {
         const ext = asset.src.match(/\.([a-zA-Z0-9]+)(?:\?.*)?$/)?.[1] ?? 'png';
         const name = (asset.name ?? 'image').replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
-        return `../assets/images/${name}.${ext}`;
+        return `/assets/images/${name}.${ext}`;
     }
     return asset.src;
 }
 
 /**
- * Convert a project-root asset path to a reference relative to the generated
- * code files (all of which live one level under `src/`).
+ * Convert a project-root asset path to a reference usable from the generated
+ * code. `public/` files become ABSOLUTE URLs (`/assets/images/x.png`): Vite
+ * serves `public/` at the root in dev AND copies it verbatim into `dist/`, so
+ * the same reference works in the source tree and the production build — a
+ * relative `../assets/...` would resolve outside `dist/` and 404. (Fonts
+ * already follow this pattern: `public/fonts` + `url('/fonts/x.woff2')`.)
  */
 function toReferencePath(projectPath: string): string {
-    if (projectPath.startsWith('public/')) return `../../${projectPath}`;
+    if (projectPath.startsWith('public/')) return `/${projectPath.slice('public/'.length)}`;
     if (projectPath.startsWith('src/')) return `../${projectPath.slice('src/'.length)}`;
     return projectPath;
+}
+
+/**
+ * Whether a node's responsive behavior swaps its image fill on any tier
+ * (a frame's `background-image` — standalone `<img>` swaps are JSX `<picture>`
+ * tiers and do not affect the inline style).
+ */
+function hasResponsiveImageOverrides(node: DesignNode): boolean {
+    const behavior = node.layout.responsive;
+    if (!behavior?.breakpoints) return false;
+    return Object.values(behavior.breakpoints).some((override) => Boolean(override?.image));
 }
 
 /**
  * Resolve the src for an image fill through the asset registry, falling back
  * to the legacy name-derived path or the remote URL.
  */
-function imageFillSrc(image: import('@framer/compiler-shared').ImageFillRef, assetPaths?: ReadonlyMap<string, string>): string {
+function imageFillSrc(
+    image: import('@framer/compiler-shared').ImageFillRef,
+    assetPaths?: ReadonlyMap<string, string>,
+): string {
     const resolved = assetPaths?.get(image.src);
     if (resolved) return toReferencePath(resolved);
     if (image.data && image.src) {
         const ext = image.src.match(/\.([a-zA-Z0-9]+)(?:\?.*)?$/)?.[1] ?? 'png';
         const name = (image.name ?? 'image').replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
-        return `../assets/images/${name}.${ext}`;
+        return `/assets/images/${name}.${ext}`;
     }
     return image.src;
 }
@@ -814,6 +943,7 @@ function renderImageNode(
     motionProps?: MotionProps,
     assetPaths?: ReadonlyMap<string, string>,
     breakpoints?: ReadonlyMap<string, number>,
+    mergeConsumerClassName?: boolean,
 ): string {
     if (node.type !== 'image') return '';
     const src = imageAssetSrc(node.asset, assetPaths);
@@ -822,7 +952,9 @@ function renderImageNode(
     const tag = hasMotion ? 'motion.img' : 'img';
     const motionAttrs = hasMotion ? formatMotionAttrs(motionProps) : '';
     const styleAttrs = renderStyleAttrs(node, tokens, undefined, assetPaths);
-    const img = `<${tag} src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" className="${className} object-${objectFit}"${styleAttrs}${motionAttrs} />`;
+    const imgClasses = `${className} object-${objectFit}`;
+    const classAttr = mergeConsumerClassName ? renderMergedClassAttr(imgClasses) : `className="${imgClasses}"`;
+    const img = `<${tag} src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" ${classAttr}${styleAttrs}${motionAttrs} />`;
 
     // Responsive image swaps fold into the responsive model as per-breakpoint
     // image overrides. A <picture> element with one <source media> per tier
@@ -835,26 +967,41 @@ function renderImageNode(
     if (responsiveTiers.length === 0) return img;
 
     const sources = responsiveTiers
-        .map(({ minWidth, src: tierSrc }) => `    <source media="(min-width: ${minWidth}px)" srcSet="${escapeAttr(responsiveImageSrc(tierSrc, assetPaths))}" />`)
+        .map(
+            ({ minWidth, src: tierSrc }) =>
+                `    <source media="(min-width: ${minWidth}px)" srcSet="${escapeAttr(responsiveImageSrc(tierSrc, assetPaths))}" />`,
+        )
         .join('\n');
     return `<picture>\n${sources}\n${indentChildren(img)}\n</picture>`;
 }
 
 /**
- * The tiers where a node swaps its image, ascending by min-width. Each tier
- * resolves through the asset registry so the `<source srcSet>` references
- * the same local file the base `<img>` uses.
+ * The tiers where a node swaps its image, DESCENDING by min-width. Browsers
+ * select the FIRST `<source>` whose media query matches (tree order), so the
+ * largest breakpoint must come first — otherwise a tablet source would shadow
+ * the desktop one. Each tier resolves through the asset registry so the
+ * `<source srcSet>` references the same local file the base `<img>` uses.
  */
-function responsiveImageTiers(node: DesignNode, breakpoints?: ReadonlyMap<string, number>): Array<{ minWidth: number; src: string }> {
+function responsiveImageTiers(
+    node: DesignNode,
+    breakpoints?: ReadonlyMap<string, number>,
+): Array<{ minWidth: number; src: string }> {
     const behavior = node.layout.responsive;
     if (!behavior?.breakpoints) return [];
     const tiers: Array<{ minWidth: number; src: string }> = [];
     for (const [breakpointName, override] of Object.entries(behavior.breakpoints)) {
         const src = override?.image?.src;
         if (!src) continue;
-        tiers.push({ minWidth: breakpoints?.get(breakpointName) ?? 0, src });
+        // A tier whose breakpoint is not in the document scale cannot be
+        // placed — skip it. `(min-width: 0px)` would match EVERY viewport and,
+        // as the last source in tree order, shadow the <img> fallback
+        // everywhere: the wrong image at every size. A real min-width-0
+        // breakpoint still resolves (the map returns 0, not undefined).
+        const minWidth = breakpoints?.get(breakpointName);
+        if (minWidth === undefined) continue;
+        tiers.push({ minWidth, src });
     }
-    return tiers.sort((a, b) => a.minWidth - b.minWidth);
+    return tiers.sort((a, b) => b.minWidth - a.minWidth);
 }
 
 /** Resolve an override image's source URL through the asset registry. */
@@ -872,37 +1019,43 @@ function renderVectorNode(
     hasMotion?: boolean,
     motionProps?: MotionProps,
     assetPaths?: ReadonlyMap<string, string>,
+    mergeConsumerClassName?: boolean,
 ): string {
     if (node.type !== 'vector') return '';
     const styleAttrs = renderStyleAttrs(node, tokens, undefined, assetPaths);
     const motionAttrs = hasMotion ? formatMotionAttrs(motionProps) : '';
     const tag = hasMotion ? 'motion.div' : 'div';
+    const classAttr = mergeConsumerClassName ? renderMergedClassAttr(className) : `className="${className}"`;
     if (node.svg) {
         let svg = node.svg.trim();
         if (svg.startsWith('<svg') && !hasMotion) {
-            return svg.replace(/^<svg([^>]*)>/, (_, attrs) => `<svg className="${className}"${styleAttrs}${attrs}>`);
+            return svg.replace(/^<svg([^>]*)>/, (_, attrs) => `<svg ${classAttr}${styleAttrs}${attrs}>`);
         }
-        return `<${tag} className="${className}"${styleAttrs}${motionAttrs} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(node.svg)} }} />`;
+        return `<${tag} ${classAttr}${styleAttrs}${motionAttrs} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(node.svg)} }} />`;
     }
     if (node.asset?.src) {
         const src = imageAssetSrc(node.asset, assetPaths);
         const imgTag = hasMotion ? 'motion.img' : 'img';
-        return `<${imgTag} src="${escapeAttr(src)}" alt="${escapeAttr(node.name)}" className="${className}"${styleAttrs}${motionAttrs} />`;
+        return `<${imgTag} src="${escapeAttr(src)}" alt="${escapeAttr(node.name)}" ${classAttr}${styleAttrs}${motionAttrs} />`;
     }
     if (node.pathData) {
         const w = Math.round(node.frame.width || 24);
         const h = Math.round(node.frame.height || 24);
         const svgTag = hasMotion ? 'motion.svg' : 'svg';
-        return `<${svgTag} viewBox="0 0 ${w} ${h}" className="${className}"${styleAttrs}${motionAttrs}><path d="${escapeAttr(node.pathData)}" fill="currentColor" /></${svgTag}>`;
+        return `<${svgTag} viewBox="0 0 ${w} ${h}" ${classAttr}${styleAttrs}${motionAttrs}><path d="${escapeAttr(node.pathData)}" fill="currentColor" /></${svgTag}>`;
     }
-    return `<${tag} className="${className}"${styleAttrs}${motionAttrs} />`;
+    return `<${tag} ${classAttr}${styleAttrs}${motionAttrs} />`;
 }
 
 /** Render a component node as JSX. */
 function renderComponentNode(node: DesignNode, className: string, options: RenderOptions): string {
     if (node.type !== 'component') return '';
-    const definition = options.componentById?.get(node.componentId) ?? options.componentById?.get(node.metadata?.sourceId ?? '');
-    const name = definition?.name ?? options.componentNameMap?.get(node.componentName) ?? sanitizeComponentName(node.componentName);
+    const definition =
+        options.componentById?.get(node.componentId) ?? options.componentById?.get(node.metadata?.sourceId ?? '');
+    const name =
+        definition?.name ??
+        options.componentNameMap?.get(node.componentName) ??
+        sanitizeComponentName(node.componentName);
     const colorProps = options.tokens ? collectTemplateColorProps(node.template) : null;
     const numericProps = options.tokens ? collectTemplateNumericProps(node.template) : null;
     const gradientProps = options.tokens ? collectTemplateGradientProps(node.template) : null;
@@ -1011,22 +1164,26 @@ function indentChildren(children: string): string {
 }
 
 /** The tokens-module objects referenced by instances in a tree (colors/radii/spacing). */
+/** Whether a fill is a gradient (linear/radial). Image fills render as
+ * `backgroundImage` with NO token refs, so they must not count here. */
+function isGradientFill(fill: Fill | undefined): boolean {
+    return Boolean(fill && (fill.type === 'linear' || fill.type === 'radial'));
+}
+
 /** Whether a node renders a gradient (its own fill or a variant member's). */
 function rendersGradient(node: DesignNode): boolean {
     // Prop-driven gradients render from the prop value, not with token refs in
     // this file — the static fill is only a fallback shape marker.
     const styleProps = node.metadata?.custom?.styleProps;
-    const gradientProp = styleProps && typeof styleProps === 'object'
-        ? (styleProps as Record<string, unknown>)['gradient']
-        : undefined;
+    const gradientProp =
+        styleProps && typeof styleProps === 'object' ? (styleProps as Record<string, unknown>)['gradient'] : undefined;
     const fill = node.style.fills?.[0];
-    if (typeof gradientProp !== 'string' && fill && fill.type !== 'solid') return true;
+    if (typeof gradientProp !== 'string' && isGradientFill(fill)) return true;
     const variant = node.metadata?.custom?.variant;
     if (variant && typeof variant === 'object') {
         const members = (variant as { members?: DesignNode[] }).members;
         for (const member of members ?? []) {
-            const memberFill = member.style.fills?.[0];
-            if (memberFill && memberFill.type !== 'solid') return true;
+            if (isGradientFill(member.style.fills?.[0])) return true;
         }
     }
     return false;
@@ -1068,7 +1225,10 @@ function resolveColorName(value: string, tokens?: DesignTokens): string | undefi
 function renderGradientPropValue(value: unknown, tokens?: DesignTokens): string {
     const gradient = value as { angle?: number; center?: { x: number; y: number }; stops?: unknown[] };
     const stops = (gradient.stops ?? [])
-        .filter((stop): stop is { color: unknown; position: unknown } => typeof stop === 'object' && stop !== null && 'color' in stop && 'position' in stop)
+        .filter(
+            (stop): stop is { color: unknown; position: unknown } =>
+                typeof stop === 'object' && stop !== null && 'color' in stop && 'position' in stop,
+        )
         .map((stop) => {
             const color = typeof stop.color === 'string' ? stop.color : '';
             const name = tokens ? resolveColorName(color, tokens) : undefined;
@@ -1117,9 +1277,18 @@ function renderElement(
     breakpoints?: ReadonlyMap<string, number>,
 ): string {
     // Leaf roots (text/image/vector) must render as their own element — never
-    // drop them into an empty container div.
+    // drop them into an empty container div. They have no wrapper element to
+    // receive a consumer `className`, so the leaf renderers MERGE the prop
+    // into their baked-in classes.
     if (node.type === 'image' || node.type === 'text' || node.type === 'vector') {
-        return renderNode(node, { animations: hasMotion, tokens, variantData, assetPaths, breakpoints });
+        return renderNode(node, {
+            animations: hasMotion,
+            tokens,
+            variantData,
+            assetPaths,
+            breakpoints,
+            mergeConsumerClassName: true,
+        });
     }
 
     const sourceTag = node.type === 'frame' && node.isSection ? 'section' : 'div';
@@ -1130,7 +1299,10 @@ function renderElement(
     const styleAttrs = renderStyleAttrs(node, tokens, variant, assetPaths);
     const tagName = hasMotion ? `motion.${tag}` : tag;
 
-    const classAttr = variant ? renderVariantClassAttr(variant, true) : `className={className ?? "${className}"}`;
+    // A consumer `className` MERGES into the baked-in classes (never replaces
+    // them — replacement would silently drop the layout classes). This matches
+    // the leaf-root merge and the variant attribute, which already appends.
+    const classAttr = variant ? renderVariantClassAttr(variant, true) : renderMergedClassAttr(className);
 
     return `<${tagName} ${classAttr}${linkAttrs(link)}${styleAttrs}${motionAttrs}>
     ${children}
@@ -1139,7 +1311,12 @@ function renderElement(
 
 /** The first navigation link carried by a node's interaction state. */
 function firstLinkInteraction(node: DesignNode): { url: string; newTab?: boolean } | undefined {
-    for (const interactions of [node.interactions?.onClick, node.interactions?.onHover, node.interactions?.onFocus, node.interactions?.onMount]) {
+    for (const interactions of [
+        node.interactions?.onClick,
+        node.interactions?.onHover,
+        node.interactions?.onFocus,
+        node.interactions?.onMount,
+    ]) {
         const link = interactions?.find((interaction) => interaction.type === 'link');
         if (link && link.type === 'link') return link;
     }

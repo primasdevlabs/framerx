@@ -59,7 +59,12 @@ describe('golden master-backed document', () => {
         // The body is the master: title → Icon slot → Content slot → footer,
         // with the default content and per-slot props intact.
         const bodyChildren = card.body.children.map((c) => `${c.type}:${c.id}`);
-        expect(bodyChildren).toEqual(['text:master_card_title', 'slot:master_icon_slot', 'slot:master_content_slot', 'text:master_card_footer']);
+        expect(bodyChildren).toEqual([
+            'text:master_card_title',
+            'slot:master_icon_slot',
+            'slot:master_content_slot',
+            'text:master_card_footer',
+        ]);
         expect(card.bodySource).toBe('master');
         const iconSlot = card.slots.find((slot) => slot.name === 'Icon')!;
         expect(iconSlot.props).toEqual({ size: 'md' });

@@ -11,7 +11,11 @@ import { validateDocument } from '../src/exporter/schemas';
 
 describe('compileProject', () => {
     it('compiles the mock document into a valid ZIP', async () => {
-        const result = await compileProject(mockFramerDocument, { projectName: 'demo', format: true, animations: true });
+        const result = await compileProject(mockFramerDocument, {
+            projectName: 'demo',
+            format: true,
+            animations: true,
+        });
 
         expect(result.name).toBe('Demo');
         expect(result.files.length).toBeGreaterThan(10);
@@ -172,7 +176,10 @@ describe('extraction gate (never fully synthesized)', () => {
 
     it('allows the export when only one enrichment degraded (warning, not a block)', async () => {
         const result = await compileProject(
-            instanceDocument({ masters: { status: 'ok', count: 2 }, codeFiles: { status: 'error', reason: 'engine exploded' } }),
+            instanceDocument({
+                masters: { status: 'ok', count: 2 },
+                codeFiles: { status: 'error', reason: 'engine exploded' },
+            }),
             { projectName: 'gate-partial' },
         );
         expect(result.zip).toBeDefined();
@@ -196,7 +203,10 @@ describe('extraction gate (never fully synthesized)', () => {
         // so an empty getCodeFiles + degraded masters must not block it.
         const result = await compileProject(
             instanceDocument({
-                masters: { status: 'empty', reason: 'getNodesWithType resolved but returned no ComponentNode masters.' },
+                masters: {
+                    status: 'empty',
+                    reason: 'getNodesWithType resolved but returned no ComponentNode masters.',
+                },
                 codeFiles: { status: 'empty', reason: 'getCodeFiles resolved but returned no component code files.' },
                 modules: { status: 'ok', count: 4 },
             }),

@@ -16,14 +16,7 @@ import type { VisualStyle } from './style';
 import type { TextContent } from './typography';
 
 /** The type of a design node. */
-export type DesignNodeType =
-    | 'frame'
-    | 'text'
-    | 'image'
-    | 'vector'
-    | 'component'
-    | 'slot'
-    | 'group';
+export type DesignNodeType = 'frame' | 'text' | 'image' | 'vector' | 'component' | 'slot' | 'group';
 
 /** The base properties shared by all design nodes. */
 export interface BaseDesignNode {
@@ -193,7 +186,11 @@ export function hasChildren(node: DesignNode): boolean {
 }
 
 /** Walk the node tree, visiting each node. */
-export function walkNodes(node: DesignNode, visitor: (node: DesignNode, parent?: DesignNode) => void, parent?: DesignNode): void {
+export function walkNodes(
+    node: DesignNode,
+    visitor: (node: DesignNode, parent?: DesignNode) => void,
+    parent?: DesignNode,
+): void {
     visitor(node, parent);
     for (const child of node.children) {
         walkNodes(child, visitor, node);

@@ -12,6 +12,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore",
     "test": "vitest run",
     "clean": "rm -rf dist"
   },

@@ -82,7 +82,16 @@ interface NodeStylePlan {
 }
 
 /** The per-node order in which style slots are visited (deterministic). */
-const STYLE_SLOT_ORDER: StyleSlot[] = ['gradient', 'backgroundColor', 'borderColor', 'borderWidth', 'radius', 'opacity', 'width', 'height'];
+const STYLE_SLOT_ORDER: StyleSlot[] = [
+    'gradient',
+    'backgroundColor',
+    'borderColor',
+    'borderWidth',
+    'radius',
+    'opacity',
+    'width',
+    'height',
+];
 
 /** Human-readable suffixes for nested-node style prop names. */
 const STYLE_SLOT_SUFFIXES: Record<StyleSlot, string> = {
@@ -280,10 +289,19 @@ function signatureOf(node: DesignNode): string {
 
     switch (node.type) {
         case 'text':
-            parts.push(JSON.stringify({ ...node.text.style, color: node.text.style.color === undefined ? undefined : true }));
+            parts.push(
+                JSON.stringify({ ...node.text.style, color: node.text.style.color === undefined ? undefined : true }),
+            );
             break;
         case 'image':
-            parts.push(JSON.stringify([node.objectFit ?? null, node.objectPosition ?? null, node.asset?.src ?? null, node.asset?.alt ?? null]));
+            parts.push(
+                JSON.stringify([
+                    node.objectFit ?? null,
+                    node.objectPosition ?? null,
+                    node.asset?.src ?? null,
+                    node.asset?.alt ?? null,
+                ]),
+            );
             break;
         case 'vector':
             parts.push(JSON.stringify([node.svg ?? null, node.pathData ?? null, node.asset?.src ?? null]));
@@ -297,7 +315,9 @@ function signatureOf(node: DesignNode): string {
             break;
         case 'frame':
             // Semantic flags affect the rendered output (section vs div, scroll).
-            parts.push(JSON.stringify([node.isSection ?? null, node.isScrollContainer ?? null, node.semanticTag ?? null]));
+            parts.push(
+                JSON.stringify([node.isSection ?? null, node.isScrollContainer ?? null, node.semanticTag ?? null]),
+            );
             break;
         case 'group':
             break;
@@ -326,7 +346,8 @@ function styleSignature(node: DesignNode): unknown {
         ...style,
         fills: undefined,
         strokes: undefined,
-        radius: style.radius === undefined ? undefined : uniformRadius === undefined ? JSON.stringify(style.radius) : true,
+        radius:
+            style.radius === undefined ? undefined : uniformRadius === undefined ? JSON.stringify(style.radius) : true,
         opacity: style.opacity === undefined ? undefined : true,
     };
 }
@@ -363,7 +384,9 @@ function buildPlan(canonical: DesignNode, members: DesignNode[]): NodeStylePlan[
     const visit = (cNode: DesignNode, mNodes: DesignNode[]): void => {
         const isContainer = cNode.type === 'frame' || cNode.type === 'group';
         const fillStructs = mNodes.map((m) => (m.style.fills ?? []).map((fill) => fill.type).join(',') || 'none');
-        const strokeStructs = mNodes.map((m) => (m.style.strokes ?? []).map((stroke) => stroke.fill.type).join(',') || 'none');
+        const strokeStructs = mNodes.map(
+            (m) => (m.style.strokes ?? []).map((stroke) => stroke.fill.type).join(',') || 'none',
+        );
         const fillsVariant = isContainer && !allEqual(fillStructs);
         const strokesVariant = isContainer && !allEqual(strokeStructs);
 
@@ -391,7 +414,12 @@ function buildPlan(canonical: DesignNode, members: DesignNode[]): NodeStylePlan[
             strokesVariant,
             members: mNodes.map((m) => ({ ...m, children: [] })),
         });
-        cNode.children.forEach((child, index) => visit(child, mNodes.map((m) => m.children[index])));
+        cNode.children.forEach((child, index) =>
+            visit(
+                child,
+                mNodes.map((m) => m.children[index]),
+            ),
+        );
     };
     visit(canonical, members);
     return plan;
@@ -426,10 +454,12 @@ function styleSlotValue(node: DesignNode, slot: StyleSlot): string | number | Gr
             if (fill?.type !== 'linear' && fill?.type !== 'radial') return undefined;
             // Stop colors AND positions travel through the prop so non-evenly
             // spaced gradients render with exact fidelity.
-            const stops = fill.stops.map((stop) => ({ color: stop.color, position: stop.position })) as [GradientStopValue, GradientStopValue, ...GradientStopValue[]];
-            return fill.type === 'linear'
-                ? { angle: fill.angle, stops }
-                : { center: fill.center, stops };
+            const stops = fill.stops.map((stop) => ({ color: stop.color, position: stop.position })) as [
+                GradientStopValue,
+                GradientStopValue,
+                ...GradientStopValue[],
+            ];
+            return fill.type === 'linear' ? { angle: fill.angle, stops } : { center: fill.center, stops };
         }
         case 'backgroundColor':
             return node.style.fills?.[0]?.type === 'solid' ? node.style.fills[0].color : undefined;

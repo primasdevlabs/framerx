@@ -103,7 +103,10 @@ body {
     color: var(--fx-text-secondary);
     cursor: pointer;
     flex: none;
-    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    transition:
+        color 0.15s ease,
+        border-color 0.15s ease,
+        background 0.15s ease;
 }
 
 .fx-header__refresh:hover:not(:disabled) {
@@ -283,7 +286,9 @@ body {
     background: #1e1e1e;
     border: 1px solid var(--fx-border-strong);
     cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
     flex: none;
     padding: 0;
 }
@@ -301,7 +306,9 @@ body {
     height: 14px;
     border-radius: 50%;
     background: #ffffff;
-    transition: transform 0.15s ease, background 0.15s ease;
+    transition:
+        transform 0.15s ease,
+        background 0.15s ease;
 }
 
 .fx-switch[data-on='true'] .fx-switch__thumb {
@@ -340,7 +347,9 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: background 0.15s ease, opacity 0.15s ease;
+    transition:
+        background 0.15s ease,
+        opacity 0.15s ease;
 }
 
 .fx-export:hover:not(:disabled) {
@@ -538,6 +547,74 @@ body {
     font-size: 13px;
 }
 
+/* Retry ------------------------------------------------------------- */
+
+.fx-retry {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    margin: 12px;
+    padding: 40px 20px;
+    background: var(--fx-surface-2);
+    border: 1px solid var(--fx-border-strong);
+    border-radius: var(--fx-radius);
+}
+
+.fx-retry__icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.fx-retry__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--fx-text);
+}
+
+.fx-retry__reason {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--fx-text-faint);
+}
+
+.fx-retry__hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--fx-text-faint);
+}
+
+.fx-retry__button {
+    margin-top: 6px;
+    min-width: 140px;
+    height: 38px;
+    border: 1px solid #ffffff !important;
+    border-radius: 8px;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-family: var(--fx-font);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.fx-retry__button:hover:not(:disabled) {
+    background: #f0f0f0 !important;
+    background-color: #f0f0f0 !important;
+}
+
+.fx-retry__button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 /* Scrollbar --------------------------------------------------------- */
 
 .fx-body::-webkit-scrollbar,
@@ -550,4 +627,3 @@ body {
     background: var(--fx-surface-3);
     border-radius: 999px;
 }
-

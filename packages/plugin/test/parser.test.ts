@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { CapabilityProbe } from '../src/parser/capabilities';
+import type { CapabilityReport } from '../src/parser/capabilities';
 import { extractFramerDocument } from '../src/parser/document';
 import { parseLayout } from '../src/parser/layout';
 import { parseSdkNode, type ParseContext } from '../src/parser/node';
@@ -22,6 +22,35 @@ function fakeNode(overrides: Partial<SdkNode> = {}): SdkNode {
         getRect: async () => ({ x: 0, y: 0, width: 100, height: 200 }),
         ...overrides,
     };
+}
+
+/** A minimal structural fake of the Framer API surface used by the walker. */
+interface FakeApi {
+    getCanvasRoot(): Promise<{
+        id: string;
+        name: string;
+        getChildren(): Promise<unknown[]>;
+    }>;
+    getNodesWithType?(type: string): Promise<unknown[]>;
+    getCodeFiles?(): Promise<unknown[]>;
+    getFonts?(): Promise<unknown[]>;
+}
+
+/** The extraction records the parser writes (the subset these tests read). */
+interface ExtractionRecord {
+    masters?: ExtractionStatus;
+    codeFiles?: ExtractionStatus;
+    fonts?: ExtractionStatus;
+    modules?: ExtractionStatus;
+    replicas?: ExtractionStatus;
+    unmatchedInstances?: Array<{ id: string }>;
+    images?: ExtractionStatus;
+    capabilities?: CapabilityReport;
+}
+
+/** Read a field off a document's extraction record (test helper). */
+function extractionField(document: { metadata?: Record<string, unknown> }, key: string): unknown {
+    return (document.metadata?.extraction as ExtractionRecord | undefined)?.[key];
 }
 
 describe('parseLayout', () => {
@@ -125,9 +154,9 @@ describe('parseSdkNode', () => {
 
         expect(node.type).toBe('Text');
         expect(node.text?.text).toBe('Hello Framer');
-        expect(node.text?.style.fontFamily).toBe('Inter');
-        expect(node.text?.style.fontWeight).toBe(700);
-        expect(node.text?.style.fontSize).toBe(32);
+        expect(node.text?.style?.fontFamily).toBe('Inter');
+        expect(node.text?.style?.fontWeight).toBe(700);
+        expect(node.text?.style?.fontSize).toBe(32);
     });
 
     it('maps an SVG node', async () => {
@@ -155,7 +184,11 @@ describe('parseSdkNode', () => {
 
     it('maps an image frame with a background image', async () => {
         const node = await parseSdkNode(
-            fakeNode({ id: 'i1', name: 'Hero Image', backgroundImage: { url: 'https://cdn.example.com/hero.png', altText: 'Hero' } }),
+            fakeNode({
+                id: 'i1',
+                name: 'Hero Image',
+                backgroundImage: { url: 'https://cdn.example.com/hero.png', altText: 'Hero' },
+            }),
         );
 
         expect(node.type).toBe('Image');
@@ -167,14 +200,12 @@ describe('parseSdkNode', () => {
         const node = await parseSdkNode(
             fakeNode({
                 name: 'Parent',
-                getChildren: async () => [
-                    fakeNode({ id: 'child', name: 'Child', getText: async () => 'hi' }),
-                ],
+                getChildren: async () => [fakeNode({ id: 'child', name: 'Child', getText: async () => 'hi' })],
             }),
         );
 
         expect(node.children).toHaveLength(1);
-        expect(node.children[0].type).toBe('Text');
+        expect(node.children?.[0].type).toBe('Text');
         expect(node.frame).toEqual({ x: 0, y: 0, width: 100, height: 200 });
     });
 
@@ -280,6 +311,24 @@ describe('image asset bytes (ImageAsset.getData)', () => {
         expect(node.image?.mimeType).toBeUndefined();
     });
 
+    it('soft-falls back to the URL when getData hangs — the node still loads within the timeout', async () => {
+        const node = await parseSdkNode(
+            fakeNode({
+                id: 'i3b',
+                name: 'Hero',
+                backgroundImage: {
+                    url: 'https://cdn.test/hero.png',
+                    getData: () => new Promise(() => {}), // never settles
+                },
+            }),
+            { sdkCallTimeoutMs: 50 },
+        );
+
+        expect(node.type).toBe('Image');
+        expect(node.image?.src).toBe('https://cdn.test/hero.png');
+        expect(node.image?.data).toBeUndefined();
+    });
+
     it('soft-falls back to the URL when getData throws — the node still loads', async () => {
         const node = await parseSdkNode(
             fakeNode({
@@ -351,6 +400,7 @@ describe('extractFramerDocument', () => {
                     {
                         id: 'page1',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
                             fakeNode({ id: 'frame1', name: 'Hero Section', getChildren: async () => [] }),
                         ],
@@ -368,6 +418,155 @@ describe('extractFramerDocument', () => {
         expect(document.nodes[0].source?.platform).toBe('framer');
     });
 
+    it('walks the v4 flat node-tree: the root IS the active page whose children are top-level content', async () => {
+        // In @framer/plugin v4+, getCanvasRoot() returns the ACTIVE page node
+        // and its getChildren() are the top-level canvas content nodes directly
+        // (no intermediate pages layer). The page enumeration includes the
+        // root's own id, so the walker must treat root children as content —
+        // NOT descend a phantom "pages" layer (which produced zero sections).
+        const api = {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Home',
+                getChildren: async () => [
+                    fakeNode({
+                        id: 'frame1',
+                        name: 'Hero Section',
+                        getChildren: async () => [fakeNode({ id: 't1', name: 'Title', getText: async () => 'Hi' })],
+                    }),
+                    fakeNode({ id: 'frame2', name: 'Footer', getChildren: async () => [] }),
+                ],
+            }),
+            getNodesWithType: async (type: string) => {
+                if (type === 'WebPageNode') return [{ id: 'root', name: 'Home', getChildren: async () => [] }];
+                if (type === 'DesignPageNode') return [];
+                return [];
+            },
+        };
+
+        const document = await extractFramerDocument(api as never);
+
+        // The active page's children are the top-level sections — non-zero.
+        expect(document.nodes).toHaveLength(2);
+        expect(document.nodes.map((n) => n.name)).toEqual(['Hero Section', 'Footer']);
+        // The nested text node is a child, not a top-level section.
+        expect(document.nodes[0].children?.map((c) => c.id)).toEqual(['t1']);
+    });
+
+    it('treats root children as content when the page enumeration is unavailable (no phantom pages layer)', async () => {
+        // When getNodesWithType is absent AND the root carries no nodeType
+        // (duck-typed mocks), the v4 content children must STILL be walked as
+        // content — the old getChildren()-presence heuristic misread them as
+        // legacy pages and dropped every top-level section.
+        const api = {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Home',
+                getChildren: async () => [
+                    fakeNode({
+                        id: 'frame1',
+                        name: 'Hero Section',
+                        getChildren: async () => [fakeNode({ id: 't1', name: 'Title', getText: async () => 'Hi' })],
+                    }),
+                    fakeNode({ id: 'frame2', name: 'Footer', getChildren: async () => [] }),
+                ],
+            }),
+            // No getNodesWithType at all — the page enumeration is unavailable.
+        };
+
+        const document = await extractFramerDocument(api as never);
+
+        // The active root's children are the top-level sections — non-zero.
+        expect(document.nodes.map((n) => n.id)).toEqual(['frame1', 'frame2']);
+        expect(document.nodes[0].children?.map((c) => c.id)).toEqual(['t1']);
+    });
+
+    it('walks additional v4 pages enumerated via getNodesWithType alongside the active root', async () => {
+        const api = {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Home',
+                getChildren: async () => [fakeNode({ id: 'hero', name: 'Hero Section' })],
+            }),
+            getNodesWithType: async (type: string) => {
+                if (type === 'WebPageNode') {
+                    return [
+                        { id: 'root', name: 'Home', getChildren: async () => [] },
+                        {
+                            id: 'about',
+                            name: 'About',
+                            getChildren: async () => [fakeNode({ id: 'about_hero', name: 'About Hero' })],
+                        },
+                    ];
+                }
+                if (type === 'DesignPageNode') return [];
+                return [];
+            },
+        };
+
+        const document = await extractFramerDocument(api as never);
+
+        // Active root content + the additional page's content, root not double-counted.
+        expect(document.nodes.map((n) => n.id)).toEqual(['hero', 'about_hero']);
+    });
+
+    it('degrades to an empty document when getCanvasRoot hangs instead of hanging the extraction forever', async () => {
+        // A host that never answers getCanvasRoot (SDK invocations carry no
+        // timeout of their own) must not leave the panel stuck on an empty
+        // state — the timeout treats the hang like a throw and the existing
+        // catch path degrades, recording WHY in the extraction record.
+        const api = {
+            getCanvasRoot: () => new Promise(() => {}), // never settles
+        };
+
+        const document = await extractFramerDocument(api as never, { sdkCallTimeoutMs: 50 });
+
+        expect(document.nodes).toHaveLength(0);
+        expect(extractionField(document, 'canvasRoot')).toMatchObject({ status: 'error' });
+    });
+
+    it('skips a page whose getChildren hangs instead of hanging the extraction', async () => {
+        const api = {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Site',
+                getChildren: async () => [
+                    {
+                        id: 'page_hang',
+                        name: 'Hung',
+                        nodeType: 'webPage',
+                        getChildren: () => new Promise(() => {}), // never settles
+                    },
+                    {
+                        id: 'page_ok',
+                        name: 'Home',
+                        nodeType: 'webPage',
+                        getChildren: async () => [fakeNode({ id: 'frame_ok', name: 'Hero Section' })],
+                    },
+                ],
+            }),
+        };
+
+        const document = await extractFramerDocument(api as never, { sdkCallTimeoutMs: 50 });
+        expect(document.nodes).toHaveLength(1);
+        expect(document.nodes[0].id).toBe('frame_ok');
+    });
+
+    it('records a font hang as an extraction error instead of hanging the extraction', async () => {
+        const api = {
+            getCanvasRoot: async () => ({
+                id: 'root',
+                name: 'Site',
+                getChildren: async () => [],
+            }),
+            getFonts: () => new Promise(() => {}), // never settles
+        };
+
+        const document = await extractFramerDocument(api as never, { sdkCallTimeoutMs: 50 });
+        expect(document.nodes).toHaveLength(0);
+        expect(extractionField(document, 'fonts')).toMatchObject({ status: 'error' });
+    });
+
     it('skips pages that cannot be walked instead of failing the extraction', async () => {
         const api = {
             getCanvasRoot: async () => ({
@@ -377,6 +576,7 @@ describe('extractFramerDocument', () => {
                     {
                         id: 'page_bad',
                         name: 'Broken',
+                        nodeType: 'webPage',
                         getChildren: async () => {
                             throw new Error('page walk failed');
                         },
@@ -384,6 +584,7 @@ describe('extractFramerDocument', () => {
                     {
                         id: 'page_ok',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [fakeNode({ id: 'frame_ok', name: 'Hero Section' })],
                     },
                 ],
@@ -418,6 +619,7 @@ describe('component masters', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
                             fakeNode({
                                 id: 'inst',
@@ -466,8 +668,14 @@ describe('component masters', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
-                            fakeNode({ id: 'inst', name: 'Badge', componentIdentifier: 'comp_badge', componentName: 'Badge' }),
+                            fakeNode({
+                                id: 'inst',
+                                name: 'Badge',
+                                componentIdentifier: 'comp_badge',
+                                componentName: 'Badge',
+                            }),
                         ],
                     },
                 ],
@@ -507,8 +715,14 @@ describe('component masters', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
-                            fakeNode({ id: 'inst', name: 'Banner', componentIdentifier: 'comp_banner', componentName: 'Banner' }),
+                            fakeNode({
+                                id: 'inst',
+                                name: 'Banner',
+                                componentIdentifier: 'comp_banner',
+                                componentName: 'Banner',
+                            }),
                         ],
                     },
                 ],
@@ -545,6 +759,7 @@ describe('component masters', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
                             fakeNode({
                                 id: 'inst',
@@ -584,6 +799,7 @@ describe('component masters', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
                             fakeNode({
                                 id: 'inst',
@@ -625,9 +841,20 @@ describe('component masters', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
-                            fakeNode({ id: 'i1', name: 'Card', componentIdentifier: 'comp_card', componentName: 'Card' }),
-                            fakeNode({ id: 'i2', name: 'Card', componentIdentifier: 'comp_card', componentName: 'Card' }),
+                            fakeNode({
+                                id: 'i1',
+                                name: 'Card',
+                                componentIdentifier: 'comp_card',
+                                componentName: 'Card',
+                            }),
+                            fakeNode({
+                                id: 'i2',
+                                name: 'Card',
+                                componentIdentifier: 'comp_card',
+                                componentName: 'Card',
+                            }),
                         ],
                     },
                 ],
@@ -645,7 +872,7 @@ describe('component masters', () => {
 
 describe('code components', () => {
     /** A fake api whose getCodeFiles returns the given files. */
-    function apiWithCodeFiles(files: unknown[], instance?: SdkNode): unknown {
+    function apiWithCodeFiles(files: unknown[], instance?: SdkNode): FakeApi {
         return {
             getCanvasRoot: async () => ({
                 id: 'root',
@@ -654,8 +881,15 @@ describe('code components', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
-                            instance ?? fakeNode({ id: 'inst', name: 'Phosphor', componentIdentifier: 'comp_phosphor', componentName: 'Phosphor' }),
+                            instance ??
+                                fakeNode({
+                                    id: 'inst',
+                                    name: 'Phosphor',
+                                    componentIdentifier: 'comp_phosphor',
+                                    componentName: 'Phosphor',
+                                }),
                         ],
                     },
                 ],
@@ -710,13 +944,16 @@ describe('code components', () => {
             ],
         };
         const document = await extractFramerDocument(
-            apiWithCodeFiles([file], fakeNode({
-                id: 'inst',
-                name: 'Phosphor',
-                componentIdentifier: 'comp_phosphor',
-                componentName: 'Phosphor',
-                insertURL: 'framer.com/m/proj@Phosphor.tsx@Phosphor',
-            })) as never,
+            apiWithCodeFiles(
+                [file],
+                fakeNode({
+                    id: 'inst',
+                    name: 'Phosphor',
+                    componentIdentifier: 'comp_phosphor',
+                    componentName: 'Phosphor',
+                    insertURL: 'framer.com/m/proj@Phosphor.tsx@Phosphor',
+                }),
+            ) as never,
         );
 
         expect(document.nodes[0].component?.code?.exportName).toBe('Phosphor');
@@ -751,8 +988,14 @@ describe('code components', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [
-                            fakeNode({ id: 'inst', name: 'Phosphor', componentIdentifier: 'comp_phosphor', componentName: 'Phosphor' }),
+                            fakeNode({
+                                id: 'inst',
+                                name: 'Phosphor',
+                                componentIdentifier: 'comp_phosphor',
+                                componentName: 'Phosphor',
+                            }),
                         ],
                     },
                 ],
@@ -768,7 +1011,7 @@ describe('code components', () => {
 
 describe('shared modules', () => {
     /** A page root with module-backed instances. */
-    function modulePage(instances: SdkNode[]): unknown {
+    function modulePage(instances: SdkNode[]): FakeApi {
         return {
             getCanvasRoot: async () => ({
                 id: 'root',
@@ -777,6 +1020,7 @@ describe('shared modules', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => instances,
                     },
                 ],
@@ -876,18 +1120,17 @@ describe('shared modules', () => {
         expect(document.nodes[0].component?.code).toBeUndefined();
         expect(document.nodes[1].component?.code).toBeUndefined();
 
-        const extraction = document.metadata?.extraction as {
-            modules?: ExtractionStatus;
-            unmatchedInstances?: Array<{ id: string }>;
-        };
-        expect(extraction.modules?.status).toBe('partial');
-        expect(extraction.modules?.count).toBe(0);
-        expect(extraction.modules?.failed).toBe(2);
+        const modules = extractionField(document, 'modules') as ExtractionStatus | undefined;
+        expect(modules?.status).toBe('partial');
+        expect(modules?.count).toBe(0);
+        expect(modules?.failed).toBe(2);
         // The reason names the exact bundles that could not be read.
-        expect(extraction.modules?.reason).toContain('Ticker');
-        expect(extraction.modules?.reason).toContain(TICKER_URL);
+        expect(modules?.reason).toContain('Ticker');
+        expect(modules?.reason).toContain(TICKER_URL);
         // Both instances are also recorded as unmatched with their keys.
-        expect(extraction.unmatchedInstances?.map((u) => u.id)).toEqual(['t1', 's1']);
+        expect(
+            (extractionField(document, 'unmatchedInstances') as Array<{ id: string }> | undefined)?.map((u) => u.id),
+        ).toEqual(['t1', 's1']);
     });
 
     it('omits the modules status when the document carries no module instances', async () => {
@@ -897,7 +1140,9 @@ describe('shared modules', () => {
         };
 
         const document = await extractFramerDocument(api as never, {
-            moduleFetcher: async () => { throw new Error('must not be called'); },
+            moduleFetcher: async () => {
+                throw new Error('must not be called');
+            },
         });
         expect((document.metadata?.extraction as { modules?: ExtractionStatus }).modules).toBeUndefined();
     });
@@ -905,7 +1150,7 @@ describe('shared modules', () => {
 
 describe('extraction diagnostics', () => {
     /** A page root with a single component instance. */
-    function instancePage(instance: SdkNode): unknown {
+    function instancePage(instance: SdkNode): FakeApi {
         return {
             getCanvasRoot: async () => ({
                 id: 'root',
@@ -914,6 +1159,7 @@ describe('extraction diagnostics', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => [instance],
                     },
                 ],
@@ -922,8 +1168,8 @@ describe('extraction diagnostics', () => {
     }
 
     /** Read the extraction record off a parsed document. */
-    function extractionOf(document: { metadata?: Record<string, unknown> }): { masters: ExtractionStatus; codeFiles: ExtractionStatus } {
-        return (document.metadata?.extraction as { masters: ExtractionStatus; codeFiles: ExtractionStatus }) ?? { masters: { status: 'ok', count: 0 }, codeFiles: { status: 'ok', count: 0 } };
+    function extractionOf(document: { metadata?: Record<string, unknown> }): ExtractionRecord {
+        return (document.metadata?.extraction ?? {}) as ExtractionRecord;
     }
 
     it('records ok for masters when the API resolves masters', async () => {
@@ -935,65 +1181,75 @@ describe('extraction diagnostics', () => {
             getChildren: async () => [],
         });
         const api = {
-            ...instancePage(fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' })),
+            ...instancePage(
+                fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' }),
+            ),
             getNodesWithType: async (type: string) => (type === 'ComponentNode' ? [masterNode] : []),
             getCodeFiles: async () => [],
         };
 
         const document = await extractFramerDocument(api as never);
         const extraction = extractionOf(document);
-        expect(extraction.masters.status).toBe('ok');
-        expect(extraction.masters.count).toBe(1);
+        expect(extraction.masters!.status).toBe('ok');
+        expect(extraction.masters!.count).toBe(1);
         // The code-file API resolved but had no component files → 'empty'.
-        expect(extraction.codeFiles.status).toBe('empty');
+        expect(extraction.codeFiles!.status).toBe('empty');
     });
 
     it('records unavailable when the SDK surface lacks the enrichment APIs', async () => {
         const document = await extractFramerDocument(
-            instancePage(fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' })) as never,
+            instancePage(
+                fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' }),
+            ) as never,
         );
 
         const extraction = extractionOf(document);
-        expect(extraction.masters.status).toBe('unavailable');
-        expect(extraction.masters.reason).toContain('getNodesWithType');
-        expect(extraction.codeFiles.status).toBe('unavailable');
-        expect(extraction.codeFiles.reason).toContain('getCodeFiles');
+        expect(extraction.masters!.status).toBe('unavailable');
+        expect(extraction.masters!.reason).toContain('getNodesWithType');
+        expect(extraction.codeFiles!.status).toBe('unavailable');
+        expect(extraction.codeFiles!.reason).toContain('getCodeFiles');
     });
 
     it('records empty when the master API resolves with no masters', async () => {
         const api = {
-            ...instancePage(fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' })),
+            ...instancePage(
+                fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' }),
+            ),
             getNodesWithType: async () => [],
         };
 
         const document = await extractFramerDocument(api as never);
-        expect(extractionOf(document).masters.status).toBe('empty');
+        expect(extractionOf(document).masters!.status).toBe('empty');
     });
 
     it('records denied when the master API throws a permission error', async () => {
         const api = {
-            ...instancePage(fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' })),
+            ...instancePage(
+                fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' }),
+            ),
             getNodesWithType: async () => {
                 throw new Error('This method requires the `componentMaster` permission');
             },
         };
 
         const document = await extractFramerDocument(api as never);
-        const masters = extractionOf(document).masters;
+        const masters = extractionOf(document).masters!;
         expect(masters.status).toBe('denied');
         expect(masters.reason).toContain('permission');
     });
 
     it('records error when the master API throws an unexpected failure', async () => {
         const api = {
-            ...instancePage(fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' })),
+            ...instancePage(
+                fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' }),
+            ),
             getNodesWithType: async () => {
                 throw new Error('engine exploded');
             },
         };
 
         const document = await extractFramerDocument(api as never);
-        const masters = extractionOf(document).masters;
+        const masters = extractionOf(document).masters!;
         expect(masters.status).toBe('error');
         expect(masters.reason).toContain('engine exploded');
     });
@@ -1012,24 +1268,43 @@ describe('extraction diagnostics', () => {
                     componentName: 'Slideshow',
                 }),
             ),
-            getNodesWithType: async (type: string) => (type === 'ComponentNode' ? [fakeNode({ id: 'm_other', name: 'Other Master', componentIdentifier: 'comp_other', componentName: 'Other' })] : []),
+            getNodesWithType: async (type: string) =>
+                type === 'ComponentNode'
+                    ? [
+                          fakeNode({
+                              id: 'm_other',
+                              name: 'Other Master',
+                              componentIdentifier: 'comp_other',
+                              componentName: 'Other',
+                          }),
+                      ]
+                    : [],
             getCodeFiles: async () => [
                 {
                     id: 'file_other',
                     name: 'Other.tsx',
                     path: 'code/Other.tsx',
                     content: 'export function Other() { return null }',
-                    exports: [{ name: 'Other', componentId: 'comp_other', insertURL: 'framer.com/m/proj@Other.tsx@Other', isDefaultExport: false, type: 'component' }],
+                    exports: [
+                        {
+                            name: 'Other',
+                            componentId: 'comp_other',
+                            insertURL: 'framer.com/m/proj@Other.tsx@Other',
+                            isDefaultExport: false,
+                            type: 'component',
+                        },
+                    ],
                 },
             ],
         };
 
         const document = await extractFramerDocument(api as never);
         const extraction = extractionOf(document);
-        expect(extraction.masters.status).toBe('ok');
-        expect(extraction.codeFiles.status).toBe('ok');
+        expect(extraction.masters!.status).toBe('ok');
+        expect(extraction.codeFiles!.status).toBe('ok');
 
-        const unmatched = (document.metadata?.extraction as { unmatchedInstances?: Array<Record<string, unknown>> }).unmatchedInstances;
+        const unmatched = (document.metadata?.extraction as { unmatchedInstances?: Array<Record<string, unknown>> })
+            .unmatchedInstances;
         expect(unmatched).toHaveLength(1);
         expect(unmatched![0]).toMatchObject({
             id: 'orphan_inst',
@@ -1052,7 +1327,9 @@ describe('extraction diagnostics', () => {
             getChildren: async () => [],
         });
         const api = {
-            ...instancePage(fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' })),
+            ...instancePage(
+                fakeNode({ id: 'inst', name: 'Button', componentIdentifier: 'comp_btn', componentName: 'Button' }),
+            ),
             getNodesWithType: async (type: string) => (type === 'ComponentNode' ? [masterNode] : []),
         };
 
@@ -1062,14 +1339,21 @@ describe('extraction diagnostics', () => {
 
     it('records denied when the code-file API throws a permission error', async () => {
         const api = {
-            ...instancePage(fakeNode({ id: 'inst', name: 'Phosphor', componentIdentifier: 'comp_phosphor', componentName: 'Phosphor' })),
+            ...instancePage(
+                fakeNode({
+                    id: 'inst',
+                    name: 'Phosphor',
+                    componentIdentifier: 'comp_phosphor',
+                    componentName: 'Phosphor',
+                }),
+            ),
             getCodeFiles: async () => {
                 throw new Error('Permission denied: getCodeFiles is not allowed');
             },
         };
 
         const document = await extractFramerDocument(api as never);
-        const codeFiles = extractionOf(document).codeFiles;
+        const codeFiles = extractionOf(document).codeFiles!;
         expect(codeFiles.status).toBe('denied');
         expect(codeFiles.reason).toContain('permission');
     });
@@ -1107,7 +1391,7 @@ describe('sdk bridge', () => {
 
 describe('project fonts', () => {
     /** A canvas root with no nodes — fonts are collected independently. */
-    function emptyCanvas(): unknown {
+    function emptyCanvas(): FakeApi {
         return {
             getCanvasRoot: async () => ({
                 id: 'root',
@@ -1121,8 +1405,20 @@ describe('project fonts', () => {
         const api = {
             ...emptyCanvas(),
             getFonts: async () => [
-                { selector: 'inter-400', family: 'Inter', weight: 400, style: 'normal', url: 'https://fonts.test/inter-400.woff2' },
-                { selector: 'inter-700', family: 'Inter', weight: 700, style: 'normal', url: 'https://fonts.test/inter-700.woff' },
+                {
+                    selector: 'inter-400',
+                    family: 'Inter',
+                    weight: 400,
+                    style: 'normal',
+                    url: 'https://fonts.test/inter-400.woff2',
+                },
+                {
+                    selector: 'inter-700',
+                    family: 'Inter',
+                    weight: 700,
+                    style: 'normal',
+                    url: 'https://fonts.test/inter-700.woff',
+                },
             ],
         };
 
@@ -1143,7 +1439,7 @@ describe('project fonts', () => {
         });
         expect(document.fonts![0].sources[0].data).toEqual(new Uint8Array([4, 0, 0]));
         expect(document.fonts![1].sources[0].format).toBe('woff');
-        const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
+        const fonts = extractionField(document, 'fonts') as ExtractionStatus | undefined;
         expect(fonts?.status).toBe('ok');
         expect(fonts?.count).toBe(2);
     });
@@ -1153,7 +1449,13 @@ describe('project fonts', () => {
             ...emptyCanvas(),
             getFonts: async () => [
                 { selector: 'custom-1', family: 'Custom Display', weight: null, style: null, url: null },
-                { selector: 'inter-400', family: 'Inter', weight: 400, style: 'normal', url: 'https://fonts.test/inter-400.woff2' },
+                {
+                    selector: 'inter-400',
+                    family: 'Inter',
+                    weight: 400,
+                    style: 'normal',
+                    url: 'https://fonts.test/inter-400.woff2',
+                },
             ],
         };
 
@@ -1169,7 +1471,7 @@ describe('project fonts', () => {
             sources: [],
         });
         expect(document.fonts!.find((font) => font.family === 'Inter')?.sources[0].data).toBeUndefined();
-        const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
+        const fonts = extractionField(document, 'fonts') as ExtractionStatus | undefined;
         expect(fonts?.status).toBe('partial');
         expect(fonts?.failed).toBe(1);
         expect(fonts?.reason).toContain('no downloadable source');
@@ -1198,7 +1500,7 @@ describe('project fonts', () => {
 
 describe('image extraction diagnostics (ImageAsset.getData outcomes)', () => {
     /** A canvas root whose page carries the given image-bearing nodes. */
-    function imagePage(nodes: SdkNode[]): unknown {
+    function imagePage(nodes: SdkNode[]): FakeApi {
         return {
             getCanvasRoot: async () => ({
                 id: 'root',
@@ -1207,6 +1509,7 @@ describe('image extraction diagnostics (ImageAsset.getData outcomes)', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => nodes,
                     },
                 ],
@@ -1216,13 +1519,29 @@ describe('image extraction diagnostics (ImageAsset.getData outcomes)', () => {
 
     /** Read the images extraction record off a parsed document. */
     function imagesOf(document: { metadata?: Record<string, unknown> }): ExtractionStatus | undefined {
-        return (document.metadata?.extraction as { images?: ExtractionStatus } | undefined)?.images;
+        return extractionField(document, 'images') as ExtractionStatus | undefined;
     }
 
     it('records ok with the count when every image resolved its original bytes via getData', async () => {
         const api = imagePage([
-            fakeNode({ id: 'img_a', name: 'A', backgroundImage: { id: 'asset_a', url: 'https://cdn.test/a.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
-            fakeNode({ id: 'img_b', name: 'B', backgroundImage: { id: 'asset_b', url: 'https://cdn.test/b.png', getData: async () => ({ bytes: new Uint8Array([2]), mimeType: 'image/png' }) } }),
+            fakeNode({
+                id: 'img_a',
+                name: 'A',
+                backgroundImage: {
+                    id: 'asset_a',
+                    url: 'https://cdn.test/a.png',
+                    getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }),
+                },
+            }),
+            fakeNode({
+                id: 'img_b',
+                name: 'B',
+                backgroundImage: {
+                    id: 'asset_b',
+                    url: 'https://cdn.test/b.png',
+                    getData: async () => ({ bytes: new Uint8Array([2]), mimeType: 'image/png' }),
+                },
+            }),
         ]);
 
         const document = await extractFramerDocument(api as never);
@@ -1231,7 +1550,15 @@ describe('image extraction diagnostics (ImageAsset.getData outcomes)', () => {
 
     it('records partial with the count when some images expose no getData (URL fetch fallback)', async () => {
         const api = imagePage([
-            fakeNode({ id: 'img_a', name: 'A', backgroundImage: { id: 'asset_a', url: 'https://cdn.test/a.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
+            fakeNode({
+                id: 'img_a',
+                name: 'A',
+                backgroundImage: {
+                    id: 'asset_a',
+                    url: 'https://cdn.test/a.png',
+                    getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }),
+                },
+            }),
             // No getData on the object — the documented URL-fetch fallback.
             fakeNode({ id: 'img_b', name: 'B', backgroundImage: { url: 'https://cdn.test/remote.png' } }),
         ]);
@@ -1271,8 +1598,24 @@ describe('image extraction diagnostics (ImageAsset.getData outcomes)', () => {
 
     it('records each asset once even when many nodes reference it', async () => {
         const api = imagePage([
-            fakeNode({ id: 'n1', name: 'A', backgroundImage: { id: 'asset_hero', url: 'https://cdn.test/hero.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
-            fakeNode({ id: 'n2', name: 'B', backgroundImage: { id: 'asset_hero', url: 'https://cdn.test/hero.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
+            fakeNode({
+                id: 'n1',
+                name: 'A',
+                backgroundImage: {
+                    id: 'asset_hero',
+                    url: 'https://cdn.test/hero.png',
+                    getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }),
+                },
+            }),
+            fakeNode({
+                id: 'n2',
+                name: 'B',
+                backgroundImage: {
+                    id: 'asset_hero',
+                    url: 'https://cdn.test/hero.png',
+                    getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }),
+                },
+            }),
         ]);
 
         const document = await extractFramerDocument(api as never);
@@ -1290,7 +1633,7 @@ describe('image extraction diagnostics (ImageAsset.getData outcomes)', () => {
 
 describe('runtime capability probe', () => {
     /** A canvas root with no nodes — fonts are probed independently of nodes. */
-    function emptyCanvas(): unknown {
+    function emptyCanvas(): FakeApi {
         return {
             getCanvasRoot: async () => ({
                 id: 'root',
@@ -1301,7 +1644,7 @@ describe('runtime capability probe', () => {
     }
 
     /** A canvas root whose page carries the given image-bearing nodes. */
-    function imagePage(nodes: SdkNode[]): unknown {
+    function imagePage(nodes: SdkNode[]): FakeApi {
         return {
             getCanvasRoot: async () => ({
                 id: 'root',
@@ -1310,6 +1653,7 @@ describe('runtime capability probe', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => nodes,
                     },
                 ],
@@ -1318,8 +1662,8 @@ describe('runtime capability probe', () => {
     }
 
     /** Read the capability report off a parsed document. */
-    function capabilitiesOf(document: { metadata?: Record<string, unknown> }): { getFonts?: CapabilityProbe; imageGetData?: CapabilityProbe } {
-        return (document.metadata?.extraction as { capabilities?: { getFonts?: CapabilityProbe; imageGetData?: CapabilityProbe } }).capabilities ?? {};
+    function capabilitiesOf(document: { metadata?: Record<string, unknown> }): CapabilityReport {
+        return (extractionField(document, 'capabilities') ?? {}) as CapabilityReport;
     }
 
     it('reports getFonts available when the live SDK object exposes it', async () => {
@@ -1338,7 +1682,7 @@ describe('runtime capability probe', () => {
         expect(getFonts?.reason).toContain('runtime capability probe');
         expect(getFonts?.reason).toContain('capability gap');
         // The fonts status derives from the probe and carries the same framing.
-        const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
+        const fonts = extractionField(document, 'fonts') as ExtractionStatus | undefined;
         expect(fonts?.status).toBe('unavailable');
         expect(fonts?.reason).toContain('capability gap');
     });
@@ -1355,7 +1699,7 @@ describe('runtime capability probe', () => {
         // The API exists (probe passes) — the partial status is a property of
         // the font (no downloadable source), explicitly NOT a missing API.
         expect(capabilitiesOf(document).getFonts).toEqual({ available: true });
-        const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
+        const fonts = extractionField(document, 'fonts') as ExtractionStatus | undefined;
         expect(fonts?.status).toBe('partial');
         expect(fonts?.reason).toContain('no downloadable source');
         expect(fonts?.reason).toContain('IS available');
@@ -1364,7 +1708,15 @@ describe('runtime capability probe', () => {
 
     it('records imageGetData available when image assets exposed getData', async () => {
         const api = imagePage([
-            fakeNode({ id: 'i1', name: 'A', backgroundImage: { id: 'a1', url: 'https://cdn.test/a.png', getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }) } }),
+            fakeNode({
+                id: 'i1',
+                name: 'A',
+                backgroundImage: {
+                    id: 'a1',
+                    url: 'https://cdn.test/a.png',
+                    getData: async () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png' }),
+                },
+            }),
         ]);
         const document = await extractFramerDocument(api as never);
 
@@ -1393,7 +1745,7 @@ describe('runtime capability probe', () => {
 
 describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
     /** A page whose children are the given top-level nodes. */
-    function page(nodes: SdkNode[]): unknown {
+    function page(nodes: SdkNode[]): FakeApi {
         return {
             getCanvasRoot: async () => ({
                 id: 'root',
@@ -1402,6 +1754,7 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
                     {
                         id: 'page',
                         name: 'Home',
+                        nodeType: 'webPage',
                         getChildren: async () => nodes,
                     },
                 ],
@@ -1411,12 +1764,22 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
 
     /** A breakpoint tier frame whose children are the replica tree. */
     function tierFrame(id: string, name: string, children: SdkNode[]): SdkNode {
-        return fakeNode({ id, name, isBreakpoint: true, isPrimaryBreakpoint: false, getChildren: async () => children });
+        return fakeNode({
+            id,
+            name,
+            isBreakpoint: true,
+            isPrimaryBreakpoint: false,
+            getChildren: async () => children,
+        });
     }
 
     it('folds a replica into its primary responsive behavior and prunes it instead of duplicating it', async () => {
         const api = page([
-            fakeNode({ id: 's1', name: 'Hero', getChildren: async () => [fakeNode({ id: 't1', name: 'Title', getText: async () => 'Hi' })] }),
+            fakeNode({
+                id: 's1',
+                name: 'Hero',
+                getChildren: async () => [fakeNode({ id: 't1', name: 'Title', getText: async () => 'Hi' })],
+            }),
             tierFrame('bp_tablet', 'Tablet', [
                 fakeNode({
                     id: 'r_s1',
@@ -1427,7 +1790,13 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
                     getChildren: async () => [
                         // A nested replica with NO overrides — a pure duplicate
                         // that inherits everything and must also be pruned.
-                        fakeNode({ id: 'r_t1', name: 'Title', isReplica: true, originalId: 't1', getText: async () => 'Hi' }),
+                        fakeNode({
+                            id: 'r_t1',
+                            name: 'Title',
+                            isReplica: true,
+                            originalId: 't1',
+                            getText: async () => 'Hi',
+                        }),
                     ],
                 }),
             ]),
@@ -1486,7 +1855,7 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
         const document = await extractFramerDocument(api as never);
         // Never dropped: the orphan replica stays as an independent node.
         expect(document.nodes.map((n) => n.id)).toEqual(['s1', 'r_ghost']);
-        const replicas = (document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas;
+        const replicas = extractionField(document, 'replicas') as ExtractionStatus | undefined;
         expect(replicas?.status).toBe('partial');
         expect(replicas?.count).toBe(0);
         expect(replicas?.failed).toBe(1);
@@ -1498,7 +1867,13 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
         const api = page([
             fakeNode({ id: 's1', name: 'Hero', backgroundImage: { url: 'https://cdn.test/hero.png' } }),
             tierFrame('bp_tablet', 'Tablet', [
-                fakeNode({ id: 'r_s1', name: 'Hero', isReplica: true, originalId: 's1', backgroundImage: { url: 'https://cdn.test/hero-tablet.png' } }),
+                fakeNode({
+                    id: 'r_s1',
+                    name: 'Hero',
+                    isReplica: true,
+                    originalId: 's1',
+                    backgroundImage: { url: 'https://cdn.test/hero-tablet.png' },
+                }),
             ]),
         ]);
 
@@ -1508,7 +1883,7 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
         expect(document.nodes.map((n) => n.id)).toEqual(['s1']);
         const primary = document.nodes[0];
         expect(primary.responsive?.Tablet?.image?.src).toBe('https://cdn.test/hero-tablet.png');
-        const replicas = (document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas;
+        const replicas = extractionField(document, 'replicas') as ExtractionStatus | undefined;
         expect(replicas?.status).toBe('ok');
         expect(replicas?.count).toBe(1);
         expect(replicas?.reason).toBeUndefined();
@@ -1529,7 +1904,15 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
                     isReplica: true,
                     originalId: 's1',
                     backgroundImage: { url: 'https://cdn.test/hero-tablet.png' },
-                    getChildren: async () => [fakeNode({ id: 'r_t1', name: 'Title', isReplica: true, originalId: 't1', getText: async () => 'Hi' })],
+                    getChildren: async () => [
+                        fakeNode({
+                            id: 'r_t1',
+                            name: 'Title',
+                            isReplica: true,
+                            originalId: 't1',
+                            getText: async () => 'Hi',
+                        }),
+                    ],
                 }),
             ]),
         ]);
@@ -1560,7 +1943,15 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
                     name: 'Hero',
                     isReplica: true,
                     originalId: 's1',
-                    getChildren: async () => [fakeNode({ id: 'r_t1', name: 'Title', isReplica: true, originalId: 't1', getText: async () => 'Hi' })],
+                    getChildren: async () => [
+                        fakeNode({
+                            id: 'r_t1',
+                            name: 'Title',
+                            isReplica: true,
+                            originalId: 't1',
+                            getText: async () => 'Hi',
+                        }),
+                    ],
                 }),
             ]),
         ]);

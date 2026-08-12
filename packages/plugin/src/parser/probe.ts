@@ -102,7 +102,9 @@ function nodeKeys(node: SdkNode): SdkKeyRecord {
 }
 
 /** Run a probe read, converting a failure into a status record instead of a throw. */
-async function readSource<T>(fn: (() => Promise<T>) | undefined): Promise<{ value: T | undefined; status: SdkSourceStatus }> {
+async function readSource<T>(
+    fn: (() => Promise<T>) | undefined,
+): Promise<{ value: T | undefined; status: SdkSourceStatus }> {
     if (typeof fn !== 'function') {
         return { value: undefined, status: { available: false, ok: false } };
     }
@@ -129,18 +131,30 @@ export async function captureSdkKeys(api: FramerApi): Promise<SdkKeyDump> {
     // `readSource` needs a real undefined when the method is missing — a
     // fallback arrow (`() => Promise.resolve([])`) would look like a present
     // method and mask the availability status.
-    const mastersRead = await readSource(typeof api.getNodesWithType === 'function' ? () => api.getNodesWithType!('ComponentNode') : undefined);
-    const instancesRead = await readSource(typeof api.getNodesWithType === 'function' ? () => api.getNodesWithType!('ComponentInstanceNode') : undefined);
+    const mastersRead = await readSource(
+        typeof api.getNodesWithType === 'function' ? () => api.getNodesWithType!('ComponentNode') : undefined,
+    );
+    const instancesRead = await readSource(
+        typeof api.getNodesWithType === 'function' ? () => api.getNodesWithType!('ComponentInstanceNode') : undefined,
+    );
     const codeRead = await readSource(typeof api.getCodeFiles === 'function' ? () => api.getCodeFiles!() : undefined);
 
     const masters = (mastersRead.value ?? []).map(nodeKeys);
     const instances = (instancesRead.value ?? []).map(nodeKeys);
-    const codeFiles = ((codeRead.value ?? []) as Array<{
-        id: string;
-        name: string;
-        path: string;
-        exports?: Array<{ name?: string; componentId?: string; insertURL?: string; isDefaultExport?: boolean; type?: string }>;
-    }>).map((file) => ({
+    const codeFiles = (
+        (codeRead.value ?? []) as Array<{
+            id: string;
+            name: string;
+            path: string;
+            exports?: Array<{
+                name?: string;
+                componentId?: string;
+                insertURL?: string;
+                isDefaultExport?: boolean;
+                type?: string;
+            }>;
+        }>
+    ).map((file) => ({
         id: file.id,
         name: file.name,
         path: file.path,

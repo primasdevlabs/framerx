@@ -58,9 +58,9 @@ function assertNotFullySynthesized(document: FramerDocument): void {
         `${name}: ${record.status}${record.reason ? ` (${record.reason})` : ''}`;
     throw new Error(
         `Export blocked — every component definition would be synthesized from instance props (approximate), not the real source. ` +
-        `Both source enrichments failed: ${detail('component masters', masters)}; ${detail('code files', codeFiles)}. ` +
-        'Close and reopen the plugin to reconnect to the Framer engine, then export again. ' +
-        'If the problem persists, check that your project role grants design/content access.',
+            `Both source enrichments failed: ${detail('component masters', masters)}; ${detail('code files', codeFiles)}. ` +
+            'Close and reopen the plugin to reconnect to the Framer engine, then export again. ' +
+            'If the problem persists, check that your project role grants design/content access.',
     );
 }
 
@@ -107,18 +107,20 @@ async function fetchRemoteAssets(document: FramerDocument): Promise<void> {
     // placeholder .txt reference.
     const urlToRefs = new Map<string, Array<{ target: Record<string, unknown>; key: string }>>();
 
-    const addRef = (url: string | undefined | null, target: Record<string, unknown>, key: string): void => {
+    const addRef = (url: string | undefined | null, target: unknown, key: string): void => {
         if (!url || !/^https?:\/\//i.test(url)) return;
-        const existing = target[key];
+        if (typeof target !== 'object' || target === null) return;
+        const record = target as Record<string, unknown>;
+        const existing = record[key];
         // Original bytes already attached (ImageAsset.getData()) are the
         // source of truth — a URL fetch must never overwrite them.
         if (existing instanceof Uint8Array && existing.byteLength > 0) return;
         const refs = urlToRefs.get(url) ?? [];
-        refs.push({ target, key });
+        refs.push({ target: record, key });
         urlToRefs.set(url, refs);
     };
 
-    const gatherUrls = (node: any): void => {
+    const gatherUrls = (node: FramerNode | undefined): void => {
         if (!node) return;
 
         // ── Standalone image node (node.image.src → node.image.data) ──────────
@@ -155,18 +157,18 @@ async function fetchRemoteAssets(document: FramerDocument): Promise<void> {
         //    bytes resolved by getData survive the fold; remote-only alternates
         //    need the same URL fetch fallback as any other image.
         if (node.responsive && typeof node.responsive === 'object') {
-            for (const override of Object.values(node.responsive as Record<string, { image?: { src?: string } }>)) {
+            for (const override of Object.values(node.responsive)) {
                 if (override?.image?.src) {
-                    addRef(override.image.src, override.image as Record<string, unknown>, 'data');
+                    addRef(override.image.src, override.image, 'data');
                 }
             }
         }
 
         // ── Component / slot props containing remote asset URLs ───────────────
         if (node.props && typeof node.props === 'object') {
-            for (const [propKey, val] of Object.entries(node.props as Record<string, unknown>)) {
+            for (const [propKey, val] of Object.entries(node.props)) {
                 if (typeof val === 'string' && /^https?:\/\//i.test(val)) {
-                    addRef(val, node.props as Record<string, unknown>, propKey);
+                    addRef(val, node.props, propKey);
                 }
             }
         }
@@ -176,7 +178,7 @@ async function fetchRemoteAssets(document: FramerDocument): Promise<void> {
             gatherUrls(child);
         }
         if (node.component?.slots) {
-            for (const slotNodes of Object.values(node.component.slots as Record<string, unknown[]>)) {
+            for (const slotNodes of Object.values(node.component.slots)) {
                 for (const slotNode of slotNodes) gatherUrls(slotNode);
             }
         }

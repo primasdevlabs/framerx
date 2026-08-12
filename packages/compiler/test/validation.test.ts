@@ -14,8 +14,14 @@ import { validateExport } from '../src/validate';
 function makeFiles(overrides: VirtualFile[] = []): VirtualFile[] {
     return [
         { path: 'package.json', content: JSON.stringify({ name: 'x', version: '0.1.0', private: true }) },
-        { path: 'src/App.tsx', content: `import { Hero } from './sections/Hero';\nexport default function App() { return <Hero />; }\n` },
-        { path: 'src/sections/Hero.tsx', content: `export function Hero() { return <div className="w-4">hi</div>; }\n` },
+        {
+            path: 'src/App.tsx',
+            content: `import { Hero } from './sections/Hero';\nexport default function App() { return <Hero />; }\n`,
+        },
+        {
+            path: 'src/sections/Hero.tsx',
+            content: `export function Hero() { return <div className="w-4">hi</div>; }\n`,
+        },
         { path: 'src/tokens.ts', content: `export const colors = {} as const;\n` },
         ...overrides,
     ];
@@ -50,7 +56,10 @@ describe('validateExport', () => {
 
     it('rejects imports that do not resolve to a generated file', async () => {
         const files = makeFiles([
-            { path: 'src/sections/Bad.tsx', content: `import { Missing } from './Missing';\nexport function Bad() { return <Missing />; }\n` },
+            {
+                path: 'src/sections/Bad.tsx',
+                content: `import { Missing } from './Missing';\nexport function Bad() { return <Missing />; }\n`,
+            },
         ]);
         const result = await validateExport(files);
         expect(result.valid).toBe(false);
@@ -58,7 +67,9 @@ describe('validateExport', () => {
     });
 
     it('rejects files with syntax errors', async () => {
-        const files = makeFiles([{ path: 'src/sections/Broken.tsx', content: `export function Broken( { return <div>; }\n` }]);
+        const files = makeFiles([
+            { path: 'src/sections/Broken.tsx', content: `export function Broken( { return <div>; }\n` },
+        ]);
         const result = await validateExport(files);
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.stage === 'codegen' && e.message.includes('Syntax error'))).toBe(true);
@@ -66,7 +77,10 @@ describe('validateExport', () => {
 
     it('rejects asset references that point at missing files', async () => {
         const files = makeFiles([
-            { path: 'src/sections/Img.tsx', content: `export function Img() { return <img src="../assets/images/missing.png" />; }\n` },
+            {
+                path: 'src/sections/Img.tsx',
+                content: `export function Img() { return <img src="../assets/images/missing.png" />; }\n`,
+            },
         ]);
         const result = await validateExport(files);
         expect(result.valid).toBe(false);
@@ -82,7 +96,10 @@ describe('validateExport', () => {
 
     it('warns (but does not fail) on remote references', async () => {
         const files = makeFiles([
-            { path: 'src/sections/Remote.tsx', content: `export function Remote() { return <img src="https://cdn.example/x.png" />; }\n` },
+            {
+                path: 'src/sections/Remote.tsx',
+                content: `export function Remote() { return <img src="https://cdn.example/x.png" />; }\n`,
+            },
         ]);
         const result = await validateExport(files);
         expect(result.valid).toBe(true);
@@ -134,7 +151,12 @@ describe('compile validation wiring', () => {
             id: 'img_broken',
             name: 'Broken Image',
             frame: { x: 0, y: 0, width: 100, height: 100 },
-            layout: { style: { strategy: 'auto' }, position: { mode: 'static' }, sizing: { widthMode: 'fixed', heightMode: 'fixed' }, spacing: {} },
+            layout: {
+                style: { strategy: 'auto' },
+                position: { mode: 'static' },
+                sizing: { widthMode: 'fixed', heightMode: 'fixed' },
+                spacing: {},
+            },
             style: {},
             constraints: { horizontal: 'left', vertical: 'top' },
             children: [],
@@ -153,7 +175,10 @@ describe('compile validation wiring', () => {
     });
 
     it('passes validation for the mock document and reports diagnostics', async () => {
-        const result = await compileFramerDocument({ id: 'doc', name: 'Diagnostics', nodes: [], version: '1.0.0' }, { projectName: 'diag' });
+        const result = await compileFramerDocument(
+            { id: 'doc', name: 'Diagnostics', nodes: [], version: '1.0.0' },
+            { projectName: 'diag' },
+        );
 
         expect(result.diagnostics).toBeDefined();
         expect(result.diagnostics.errors).toBe(0);

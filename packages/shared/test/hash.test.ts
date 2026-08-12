@@ -21,7 +21,9 @@ describe('sha256', () => {
     });
 
     it('matches the NIST 1,000,000-character "a" vector', () => {
-        expect(sha256HexOfString('a'.repeat(1_000_000))).toBe('cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0');
+        expect(sha256HexOfString('a'.repeat(1_000_000))).toBe(
+            'cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0',
+        );
     });
 
     it('is deterministic for identical bytes', () => {

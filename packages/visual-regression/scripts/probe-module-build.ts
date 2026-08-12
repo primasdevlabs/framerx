@@ -103,7 +103,9 @@ async function main(): Promise<void> {
     // 3. Compile.
     const result = await compileFramerDocument(document, { projectName: 'ModuleProbe' });
     const warnings = result.diagnostics.validation.warnings;
-    console.log(`compiled: ${result.files.length} files, ${warnings.length} warnings, valid=${result.diagnostics.validation.valid}`);
+    console.log(
+        `compiled: ${result.files.length} files, ${warnings.length} warnings, valid=${result.diagnostics.validation.valid}`,
+    );
     for (const warning of warnings) console.log(`  ⚠ ${warning.message.slice(0, 140)}`);
 
     // 4. Write the project (with its own workspace marker so pnpm resolves

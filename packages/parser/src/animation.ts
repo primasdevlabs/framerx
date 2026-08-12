@@ -2,7 +2,16 @@
  * Framer interactions → Design AST animation conversion.
  */
 
-import type { Animation, AnimationConfig, AnimationState, AnimatedProperties, AnimationTrigger, Easing, TweenConfig, ViewportConfig } from '@framer/compiler-ast';
+import type {
+    Animation,
+    AnimationConfig,
+    AnimationState,
+    AnimatedProperties,
+    AnimationTrigger,
+    Easing,
+    TweenConfig,
+    ViewportConfig,
+} from '@framer/compiler-ast';
 import { stableId } from '@framer/compiler-shared';
 
 import type { FramerAnimation, FramerInteraction } from './types';
@@ -158,7 +167,9 @@ export function parseAnimatedProperties(properties?: Record<string, unknown>): A
 
     const parseVal = (val: unknown) => {
         if (Array.isArray(val)) {
-            return val.map((item) => (typeof item === 'object' && item !== null && 'value' in item ? item : { value: item }));
+            return val.map((item) =>
+                typeof item === 'object' && item !== null && 'value' in item ? item : { value: item },
+            );
         }
         return val;
     };

@@ -12,7 +12,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -111,10 +111,7 @@ export async function runVisualRegression(config: VisualRegressionConfig): Promi
         // The generated project gets its OWN pnpm workspace marker so `pnpm
         // install` inside it resolves react/motion/tailwind independently
         // instead of being absorbed by the monorepo workspace above it.
-        await writeFile(
-            join(generatedDir, 'pnpm-workspace.yaml'),
-            'packages:\n  - "**"\n',
-        );
+        await writeFile(join(generatedDir, 'pnpm-workspace.yaml'), 'packages:\n  - "**"\n');
     }
 
     // ── 2. Render the reference page (independent baseline) ───────────────
@@ -162,10 +159,7 @@ export async function runVisualRegression(config: VisualRegressionConfig): Promi
                 executablePath: config.chromePath,
             });
 
-            const diff: DiffResult = compareImages(
-                decodePng(referencePng.png),
-                decodePng(generatedPng.png),
-            );
+            const diff: DiffResult = compareImages(decodePng(referencePng.png), decodePng(generatedPng.png));
             const verdict: ToleranceVerdict = {
                 name: bp.name,
                 width: bp.width,
@@ -229,7 +223,7 @@ export async function runVisualRegression(config: VisualRegressionConfig): Promi
 }
 
 /** Run a command in a directory and throw with output on failure. */
-async function runInDir(cwd: string, command: string, args: string[]): Promise<void> {
+export async function runInDir(cwd: string, command: string, args: string[]): Promise<void> {
     // Windows: package-manager entry points are `.cmd` shims that can only be
     // launched through the shell (spawnSync on the shim itself → EINVAL).
     const cmd = process.platform === 'win32' ? 'cmd.exe' : command;

@@ -7,7 +7,12 @@ interface DocumentCardProps {
 }
 
 export function DocumentCard({ document }: DocumentCardProps) {
-    const nodes = document.nodes as unknown as Array<{ type?: string; image?: { src?: string } | null; text?: { style?: { fontFamily?: string } } | null; children?: unknown[] }>;
+    const nodes = document.nodes as unknown as Array<{
+        type?: string;
+        image?: { src?: string } | null;
+        text?: { style?: { fontFamily?: string } } | null;
+        children?: unknown[];
+    }>;
     const nodeCount = countNodes(nodes as Array<{ children?: unknown[] }>);
     const assetCount = countImages(nodes);
     const fontCount = uniqueFontFamilies(nodes).length;
@@ -19,7 +24,8 @@ export function DocumentCard({ document }: DocumentCardProps) {
                 {document.name}
             </p>
             <p className="fx-doc__source">
-                {document.metadata?.source === 'framer' ? 'Framer project' : 'Design document'} · v{document.version ?? '1.0.0'}
+                {document.metadata?.source === 'framer' ? 'Framer project' : 'Design document'} · v
+                {document.version ?? '1.0.0'}
             </p>
             <div className="fx-stats">
                 <div className="fx-stat">

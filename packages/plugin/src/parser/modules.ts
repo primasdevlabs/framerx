@@ -32,7 +32,10 @@ function urlFileName(url: string): string {
 }
 
 /** The export name a component identifier references (`module:.../File.js:Icon`). */
-export function moduleExportName(componentIdentifier: string | undefined | null): { exportName: string; isDefaultExport: boolean } {
+export function moduleExportName(componentIdentifier: string | undefined | null): {
+    exportName: string;
+    isDefaultExport: boolean;
+} {
     const id = componentIdentifier ?? '';
     // The identifier is `module:<url>[:<export>]` — the URL itself may contain
     // colons, so only look past the `module:` prefix.
@@ -56,7 +59,10 @@ export function isModuleBacked(opts: { componentIdentifier?: string | null; inse
 }
 
 /** The module bundle URL for an instance (the insertURL is canonical). */
-export function moduleUrlOf(opts: { componentIdentifier?: string | null; insertURL?: string | null }): string | undefined {
+export function moduleUrlOf(opts: {
+    componentIdentifier?: string | null;
+    insertURL?: string | null;
+}): string | undefined {
     if (opts.insertURL) return opts.insertURL;
     return undefined;
 }

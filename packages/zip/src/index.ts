@@ -72,7 +72,5 @@ export async function createZip(files: ZipFile[], options: ZipOptions = {}): Pro
 
 /** Create a ZIP archive from a record of path → content. */
 export async function createZipFromRecord(files: Record<string, string>): Promise<Uint8Array> {
-    return createZip(
-        Object.entries(files).map(([path, content]) => ({ path, content })),
-    );
+    return createZip(Object.entries(files).map(([path, content]) => ({ path, content })));
 }

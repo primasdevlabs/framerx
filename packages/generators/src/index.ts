@@ -10,12 +10,29 @@ import { buildFontRegistry, fontRegistryToVirtualFiles } from './fonts/registry'
 import { buildComponentDefinitions, definitionById } from './components/model';
 import { generateResponsiveCss } from './responsive/css';
 import { generateApp, generateIndexCss, generateIndexHtml, generateMainEntry, generateViteEnv } from './react/app';
-import { adaptModuleSource, codeFilePath, collectCodeBareImports, generateCodeFile, generateFramerShim, generateModuleDeclaration, isBuiltinImport, resolveBareImportVersion } from './react/code';
+import {
+    adaptModuleSource,
+    codeFilePath,
+    collectCodeBareImports,
+    generateCodeFile,
+    generateFramerShim,
+    generateModuleDeclaration,
+    isBuiltinImport,
+    resolveBareImportVersion,
+} from './react/code';
 import { generateComponent } from './react/component';
 import { generateSection } from './react/section';
 import { generateTailwindConfig } from './tailwind/config';
 import { extractTokens, generateTokensModule } from './tailwind/tokens';
-import { generateEslintConfig, generateGitignore, generatePostcssConfig, generatePrettierConfig, generateReadme, generateTsConfig, generateViteConfig } from './package/config';
+import {
+    generateEslintConfig,
+    generateGitignore,
+    generatePostcssConfig,
+    generatePrettierConfig,
+    generateReadme,
+    generateTsConfig,
+    generateViteConfig,
+} from './package/config';
 import { generatePackageJson } from './package/package-json';
 import type { ComponentDefinition } from '@framer/compiler-ast';
 import type { GeneratedProject, GeneratorOptions, VirtualFile } from './types';
@@ -81,7 +98,10 @@ export function assignComponentNames(nodes: DesignNode[]): Map<string, string> {
 }
 
 /** Generate a complete project from a DesignDocument. */
-export function generateProject(document: DesignDocument, options: GeneratorOptions = { projectName: DEFAULT_PROJECT_NAME }): GeneratedProject {
+export function generateProject(
+    document: DesignDocument,
+    options: GeneratorOptions = { projectName: DEFAULT_PROJECT_NAME },
+): GeneratedProject {
     const projectName = sanitizeComponentName(options.projectName || document.name || DEFAULT_PROJECT_NAME);
     const files: VirtualFile[] = [];
     const componentNames = new Set<string>();
@@ -257,18 +277,20 @@ export function generateProject(document: DesignDocument, options: GeneratorOpti
             continue;
         }
 
-        files.push(generateComponent(definition.body, {
-            animations: options.animations,
-            tokens,
-            assetPaths,
-            breakpoints,
-            componentNameMap,
-            componentById,
-            codeImports,
-            warnings,
-            componentName: definition.name,
-            definition,
-        }));
+        files.push(
+            generateComponent(definition.body, {
+                animations: options.animations,
+                tokens,
+                assetPaths,
+                breakpoints,
+                componentNameMap,
+                componentById,
+                codeImports,
+                warnings,
+                componentName: definition.name,
+                definition,
+            }),
+        );
         generatedNodes.push(definition.body);
     }
 

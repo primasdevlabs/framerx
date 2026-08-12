@@ -8,6 +8,7 @@
  */
 
 import type { ExtractionStatus, FramerApi, FramerCodeFile, FramerCodeFileExport } from './sdk';
+import { withTimeout } from './sdk';
 
 /** A component export matched to its code file. */
 export interface CodeFileSource {
@@ -63,7 +64,7 @@ export interface CodeFileFetchResult {
  * synthesized body, never a broken export), and always reporting WHY so the
  * export diagnostics can explain the fallback.
  */
-export async function fetchCodeFiles(api: FramerApi): Promise<CodeFileFetchResult> {
+export async function fetchCodeFiles(api: FramerApi, callTimeout: number): Promise<CodeFileFetchResult> {
     const index: CodeFileIndex = {
         byComponentId: new Map(),
         byInsertURL: new Map(),
@@ -71,10 +72,16 @@ export async function fetchCodeFiles(api: FramerApi): Promise<CodeFileFetchResul
         byPath: new Map(),
     };
     if (typeof api.getCodeFiles !== 'function') {
-        return { index, status: { status: 'unavailable', reason: 'The SDK does not expose getCodeFiles; code components cannot be read.' } };
+        return {
+            index,
+            status: {
+                status: 'unavailable',
+                reason: 'The SDK does not expose getCodeFiles; code components cannot be read.',
+            },
+        };
     }
     try {
-        const files = await api.getCodeFiles();
+        const files = await withTimeout(api.getCodeFiles(), callTimeout, 'getCodeFiles');
         let count = 0;
         let usableFiles = 0;
         for (const file of files) {
@@ -103,7 +110,10 @@ export async function fetchCodeFiles(api: FramerApi): Promise<CodeFileFetchResul
         // file whose exports carry only an insertURL or a name still indexes
         // (matchCodeFile falls back to those keys), so it is NOT empty.
         if (usableFiles === 0) {
-            return { index, status: { status: 'empty', reason: 'getCodeFiles resolved but returned no component code files.' } };
+            return {
+                index,
+                status: { status: 'empty', reason: 'getCodeFiles resolved but returned no component code files.' },
+            };
         }
         return { index, status: { status: 'ok', count } };
     } catch (error) {
@@ -148,7 +158,9 @@ export function resolveCodeClosure(file: FramerCodeFile, index: CodeFileIndex): 
     const dependencies: CodeDependency[] = [];
     const visit = (current: FramerCodeFile): void => {
         for (const spec of extractRelativeImports(current.content)) {
-            const resolved = resolveRelativeCandidates(current.path, spec).find((candidate) => index.byPath.has(candidate));
+            const resolved = resolveRelativeCandidates(current.path, spec).find((candidate) =>
+                index.byPath.has(candidate),
+            );
             const target = resolved ? index.byPath.get(resolved) : undefined;
             if (!target || seen.has(normalizeCodePath(target.path))) continue;
             seen.add(normalizeCodePath(target.path));

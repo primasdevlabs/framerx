@@ -12,7 +12,13 @@
  */
 
 import type { DesignDocument, DesignNode } from '@framer/compiler-ast';
-import { buildAssets, generateExportManifest, generateProject, type GeneratedProject, type VirtualFile } from '@framer/compiler-generators';
+import {
+    buildAssets,
+    generateExportManifest,
+    generateProject,
+    type GeneratedProject,
+    type VirtualFile,
+} from '@framer/compiler-generators';
 import { formatFile } from '@framer/compiler-formatter';
 import { parseFramerDocument, type FramerDocument } from '@framer/compiler-parser';
 import { DEFAULT_PROJECT_NAME, sha256HexOfString } from '@framer/compiler-shared';
@@ -20,9 +26,8 @@ import { createZip } from '@framer/compiler-zip';
 
 import { collectCoverage, renderCoverageText, type CoverageReport } from './coverage';
 import { computeDiagnostics, type ExportDiagnostics } from './diagnostics';
-import { extractComponents, type ExtractOptions } from './extractor';
+import type { ExtractOptions } from './extractor';
 import { optimizeDocument } from './optimizer';
-import { separateComponents } from './separator';
 import { validateExport, type ExportValidationResult, type ValidationError, type ValidationWarning } from './validate';
 
 export * from './coverage';
@@ -33,7 +38,6 @@ export * from './separator';
 export * from './validate';
 
 const COMPILER_VERSION = '0.1.0';
-const EXPORT_MANIFEST_PATH = '.export-manifest.json';
 
 /** The compiler options. */
 export interface CompileOptions {
@@ -90,7 +94,9 @@ export class ExportValidationError extends Error {
             .slice(0, 5)
             .map((error) => `${error.stage}${error.path ? ` (${error.path})` : ''}: ${error.message}`)
             .join('\n');
-        super(`Export failed — ${validation.errors.length} validation error${validation.errors.length === 1 ? '' : 's'}.\n${detail}`);
+        super(
+            `Export failed — ${validation.errors.length} validation error${validation.errors.length === 1 ? '' : 's'}.\n${detail}`,
+        );
         this.name = 'ExportValidationError';
         this.validation = validation;
     }
@@ -400,7 +406,9 @@ function extractionWarnings(source: FramerDocument | undefined): Array<{ stage: 
  * extraction record. Undefined when the source carries no replica record
  * (the manifest then renders zero-filled counts — deterministic either way).
  */
-function manifestReplicas(source: FramerDocument | undefined): { discovered: number; folded: number; unresolved: number; unsupported: number } | undefined {
+function manifestReplicas(
+    source: FramerDocument | undefined,
+): { discovered: number; folded: number; unresolved: number; unsupported: number } | undefined {
     if (!source) return undefined;
     const metadata = source.metadata as { extraction?: ExtractionMetadata } | undefined;
     const replicas = metadata?.extraction?.replicas;
@@ -426,7 +434,9 @@ function computeDerivationHash(ast: DesignDocument, source?: FramerDocument): st
 }
 
 /** Deterministic digest of a single node for the compilation hash. */
-function nodeDigest(node: DesignNode | { id?: string; type?: string; name?: string; frame?: unknown; children?: unknown[] }): Record<string, unknown> {
+function nodeDigest(
+    node: DesignNode | { id?: string; type?: string; name?: string; frame?: unknown; children?: unknown[] },
+): Record<string, unknown> {
     return {
         id: node.id,
         type: node.type,
@@ -436,7 +446,10 @@ function nodeDigest(node: DesignNode | { id?: string; type?: string; name?: stri
 }
 
 /** Summarize component definitions + instances for the manifest. */
-function summarizeComponents(ast: DesignDocument, files: VirtualFile[]): {
+function summarizeComponents(
+    ast: DesignDocument,
+    files: VirtualFile[],
+): {
     definitions: number;
     instances: number;
     fromMasters: number;
@@ -477,7 +490,10 @@ export type { ValidationError, ValidationWarning };
  * Compile a Design AST without running the validator (used by golden tests
  * that deliberately exercise broken documents).
  */
-export async function compileWithoutValidation(document: DesignDocument, options: CompileOptions = {}): Promise<Omit<CompileResult, 'diagnostics'> & { validation: ExportValidationResult }> {
+export async function compileWithoutValidation(
+    document: DesignDocument,
+    options: CompileOptions = {},
+): Promise<Omit<CompileResult, 'diagnostics'> & { validation: ExportValidationResult }> {
     const runOptimizer = options.optimize !== false;
     const runFormatter = options.format !== false;
 
@@ -504,7 +520,11 @@ export async function compileWithoutValidation(document: DesignDocument, options
     // the manifest in place so its content can satisfy emission-needles
     // (e.g. `fromMasters`), then emit the final manifest. Same logic as
     // `compile()` so the two paths always agree.
-    const preliminaryCoverage: CoverageReport = collectCoverage({ source: options.source ?? unknownFramerSource(ast), ast, files });
+    const preliminaryCoverage: CoverageReport = collectCoverage({
+        source: options.source ?? unknownFramerSource(ast),
+        ast,
+        files,
+    });
     const preliminaryManifestFile: VirtualFile = generateExportManifest({
         compilerVersion: COMPILER_VERSION,
         projectName,
@@ -531,7 +551,11 @@ export async function compileWithoutValidation(document: DesignDocument, options
         validation: { valid: validation.valid, warnings: validation.warnings.length, errors: validation.errors.length },
     });
     const filesWithPreliminaryManifest: VirtualFile[] = [...files, preliminaryManifestFile];
-    const coverage: CoverageReport = collectCoverage({ source: options.source ?? unknownFramerSource(ast), ast, files: filesWithPreliminaryManifest });
+    const coverage: CoverageReport = collectCoverage({
+        source: options.source ?? unknownFramerSource(ast),
+        ast,
+        files: filesWithPreliminaryManifest,
+    });
     const manifestFile = generateExportManifest({
         compilerVersion: COMPILER_VERSION,
         projectName,
@@ -568,7 +592,10 @@ export async function compileWithoutValidation(document: DesignDocument, options
 }
 
 /** Compile a Framer document end-to-end (parser + compiler). */
-export async function compileFramerDocument(document: FramerDocument, options: CompileOptions = {}): Promise<CompileResult> {
+export async function compileFramerDocument(
+    document: FramerDocument,
+    options: CompileOptions = {},
+): Promise<CompileResult> {
     return compile(parseFramerDocument(document), { ...options, source: document });
 }
 

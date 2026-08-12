@@ -23,7 +23,15 @@
  *      always has a position, never a silent drop.
  */
 
-import type { ComponentDefinition, ComponentProp, ComponentPropType, ComponentSlot, DesignComponentNode, DesignDocument, DesignNode } from '@framer/compiler-ast';
+import type {
+    ComponentDefinition,
+    ComponentProp,
+    ComponentPropType,
+    ComponentSlot,
+    DesignComponentNode,
+    DesignDocument,
+    DesignNode,
+} from '@framer/compiler-ast';
 import { sanitizeComponentName, stableId, toVariableName } from '@framer/compiler-shared';
 
 import { COLOR_STYLE_FIELDS, NUMERIC_TOKEN_FIELDS } from '../tailwind/tokens';
@@ -87,12 +95,17 @@ export function derivePropTypes(body: DesignNode): Record<string, ComponentProp>
             for (const [field, propName] of Object.entries(styleProps)) {
                 if (typeof propName !== 'string' || props[propName] !== undefined) continue;
                 const type: ComponentPropType =
-                    field === 'gradient' ? 'gradient'
-                        : COLOR_STYLE_FIELDS.has(field) ? 'color'
-                        : field === 'radius' ? 'radius'
-                        : NUMERIC_TOKEN_FIELDS.has(field) ? 'spacing'
-                        : NUMERIC_STYLE_FIELDS.has(field) ? 'number'
-                        : 'string';
+                    field === 'gradient'
+                        ? 'gradient'
+                        : COLOR_STYLE_FIELDS.has(field)
+                          ? 'color'
+                          : field === 'radius'
+                            ? 'radius'
+                            : NUMERIC_TOKEN_FIELDS.has(field)
+                              ? 'spacing'
+                              : NUMERIC_STYLE_FIELDS.has(field)
+                                ? 'number'
+                                : 'string';
                 props[propName] = { type };
             }
         }
@@ -154,7 +167,11 @@ export function slotNodeIdsBySlotName(body: DesignNode): Map<string, string> {
 }
 
 /** Collect every component instance in a tree (templates, slots, children). */
-export function collectNestedInstances(node: DesignNode, out: DesignComponentNode[] = [], seen = new Set<string>()): DesignComponentNode[] {
+export function collectNestedInstances(
+    node: DesignNode,
+    out: DesignComponentNode[] = [],
+    seen = new Set<string>(),
+): DesignComponentNode[] {
     const visit = (n: DesignNode): void => {
         if (n.type === 'component') {
             if (seen.has(n.id)) return;
@@ -408,19 +425,14 @@ function slotNode(key: string, name: string): DesignNode {
  * sorted by id). Types are derived from the observed value kinds: all-string
  * → string, all-number → number, all-boolean → boolean, mixed → unknown.
  */
-function mergeInstanceProps(
-    props: Record<string, ComponentProp>,
-    members: DesignComponentNode[],
-): string[] {
+function mergeInstanceProps(props: Record<string, ComponentProp>, members: DesignComponentNode[]): string[] {
     const added: string[] = [];
     const seen = new Set<string>();
     for (const member of members) {
         for (const key of Object.keys(member.props ?? {})) {
             if (props[key] !== undefined || seen.has(key)) continue;
             seen.add(key);
-            const values = members
-                .map((m) => m.props?.[key])
-                .filter((v): v is unknown => v !== undefined);
+            const values = members.map((m) => m.props?.[key]).filter((v): v is unknown => v !== undefined);
             props[key] = { type: propTypeFromValues(values) };
             added.push(key);
         }
@@ -441,7 +453,10 @@ function propTypeFromValues(values: unknown[]): ComponentProp['type'] {
 }
 
 /** The default prop values for a definition (canonical instance values). */
-function collectDefaults(members: DesignComponentNode[], props: Record<string, ComponentProp>): Record<string, unknown> {
+function collectDefaults(
+    members: DesignComponentNode[],
+    props: Record<string, ComponentProp>,
+): Record<string, unknown> {
     const canonical = members[0];
     const defaults: Record<string, unknown> = {};
     for (const name of Object.keys(props)) {

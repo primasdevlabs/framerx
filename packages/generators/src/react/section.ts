@@ -5,8 +5,6 @@
 import type { DesignNode } from '@framer/compiler-ast';
 import { sanitizeComponentName } from '@framer/compiler-shared';
 
-import type { DesignTokens } from '../tailwind/tokens';
-
 import { generateComponent, type ComponentOptions } from './component';
 
 /** The options for generating a section component. */

@@ -41,11 +41,7 @@ export interface ServeHandle {
 }
 
 /** Serve a directory on an ephemeral (or fixed) localhost port. */
-export async function serveDirectory(
-    root: string,
-    port = 0,
-    host = '127.0.0.1',
-): Promise<ServeHandle> {
+export async function serveDirectory(root: string, port = 0, host = '127.0.0.1'): Promise<ServeHandle> {
     const base = resolve(root);
 
     const server: Server = createServer(async (req, res) => {

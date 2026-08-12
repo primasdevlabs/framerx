@@ -27,13 +27,7 @@ import type { FramerDocument, FramerNode } from '@framer/compiler-parser';
 import type { VirtualFile } from '@framer/compiler-generators';
 
 /** A logical "lifecycle stage" of a property. */
-export type CoverageStage =
-    | 'discovered'
-    | 'framer-preserved'
-    | 'ast-preserved'
-    | 'emitted'
-    | 'unsupported'
-    | 'lost';
+export type CoverageStage = 'discovered' | 'framer-preserved' | 'ast-preserved' | 'emitted' | 'unsupported' | 'lost';
 
 /** A single known Framer SDK property. */
 export interface SourceProperty {
@@ -74,85 +68,503 @@ export interface SourceProperty {
  */
 export const SOURCE_PROPERTIES: readonly SourceProperty[] = Object.freeze([
     // ── Node identity & structure ─────────────────────────────────────
-    { id: 'node.id', name: 'Node id', sdkAttribute: 'id', framerNodePath: 'id', designAstPath: 'id', kind: 'string', emittedAs: 'key prop / className hash' },
-    { id: 'node.name', name: 'Node name', sdkAttribute: 'name', framerNodePath: 'name', designAstPath: 'name', kind: 'string', emittedAs: 'component identifier (sanitized)' },
-    { id: 'node.rect', name: 'Bounding rect', sdkAttribute: 'getRect()', framerNodePath: 'frame', designAstPath: 'frame', kind: 'object', emittedAs: 'inline width/height (Tailwind/CSS)' },
+    {
+        id: 'node.id',
+        name: 'Node id',
+        sdkAttribute: 'id',
+        framerNodePath: 'id',
+        designAstPath: 'id',
+        kind: 'string',
+        emittedAs: 'key prop / className hash',
+    },
+    {
+        id: 'node.name',
+        name: 'Node name',
+        sdkAttribute: 'name',
+        framerNodePath: 'name',
+        designAstPath: 'name',
+        kind: 'string',
+        emittedAs: 'component identifier (sanitized)',
+    },
+    {
+        id: 'node.rect',
+        name: 'Bounding rect',
+        sdkAttribute: 'getRect()',
+        framerNodePath: 'frame',
+        designAstPath: 'frame',
+        kind: 'object',
+        emittedAs: 'inline width/height (Tailwind/CSS)',
+    },
     // Replica identity (SDK `isReplica` + `originalId`): a breakpoint/variant
     // override of a primary node, NOT a duplicate. Resolved replicas are
     // folded into their primary's responsive behavior (and counted in the
     // manifest's `replicas` section); replica nodes that SURVIVE the fold
     // (unresolved — kept as independent nodes) are marked `replicaOf` in the
     // AST, so the identity is tracked through every stage of the pipeline.
-    { id: 'source.isReplica', name: 'Replica identity (breakpoint/variant override)', sdkAttribute: 'isReplica', framerNodePath: 'source.isReplica', designAstPath: 'metadata.custom.replicaOf', kind: 'boolean', emittedAs: 'export-manifest.json `replicas` section (replica folding counts)' },
+    {
+        id: 'source.isReplica',
+        name: 'Replica identity (breakpoint/variant override)',
+        sdkAttribute: 'isReplica',
+        framerNodePath: 'source.isReplica',
+        designAstPath: 'metadata.custom.replicaOf',
+        kind: 'boolean',
+        emittedAs: 'export-manifest.json `replicas` section (replica folding counts)',
+    },
 
     // ── Layout: strategy/shape ────────────────────────────────────────
-    { id: 'layout.strategy', name: 'Layout strategy (stack / grid / auto)', sdkAttribute: 'layout', framerNodePath: 'layout.strategy', designAstPath: 'layout.style.strategy', kind: 'string', emittedAs: 'flex / grid / block' },
-    { id: 'layout.stackDirection', name: 'Stack direction', sdkAttribute: 'stackDirection', framerNodePath: 'layout.direction', designAstPath: 'layout.style.direction', kind: 'string', emittedAs: 'flex-row / flex-col' },
-    { id: 'layout.stackDistribution', name: 'Stack distribution', sdkAttribute: 'stackDistribution', framerNodePath: 'layout.justifyContent', designAstPath: 'layout.style.justifyContent', kind: 'string', emittedAs: 'justify-* Tailwind / inline style' },
-    { id: 'layout.stackAlignment', name: 'Stack alignment', sdkAttribute: 'stackAlignment', framerNodePath: 'layout.alignItems', designAstPath: 'layout.style.alignItems', kind: 'string', emittedAs: 'items-* Tailwind / inline style' },
-    { id: 'layout.stackWrapEnabled', name: 'Stack wrap', sdkAttribute: 'stackWrapEnabled', framerNodePath: 'layout.flexWrap', designAstPath: 'layout.style.flexWrap', kind: 'string', emittedAs: 'flex-wrap (when wrap=true) — nowrap is the documented Tailwind default and emits no extra class' },
-    { id: 'layout.gap', name: 'Stack gap', sdkAttribute: 'gap', framerNodePath: 'layout.gap', designAstPath: 'layout.style.gap', kind: 'string', emittedAs: 'gap-N Tailwind / inline style' },
-    { id: 'layout.padding', name: 'Padding', sdkAttribute: 'padding', framerNodePath: 'layout.padding', designAstPath: 'layout.spacing.padding', kind: 'string', emittedAs: 'p-/px-/py-* Tailwind / inline style' },
-    { id: 'layout.gridColumnCount', name: 'Grid columns', sdkAttribute: 'gridColumnCount', framerNodePath: 'layout.columns', designAstPath: 'layout.style.columns', kind: 'string', emittedAs: 'grid-cols-*' },
-    { id: 'layout.gridRowCount', name: 'Grid rows', sdkAttribute: 'gridRowCount', framerNodePath: 'layout.rows', designAstPath: 'layout.style.rows', kind: 'string', emittedAs: 'grid-rows-*' },
+    {
+        id: 'layout.strategy',
+        name: 'Layout strategy (stack / grid / auto)',
+        sdkAttribute: 'layout',
+        framerNodePath: 'layout.strategy',
+        designAstPath: 'layout.style.strategy',
+        kind: 'string',
+        emittedAs: 'flex / grid / block',
+    },
+    {
+        id: 'layout.stackDirection',
+        name: 'Stack direction',
+        sdkAttribute: 'stackDirection',
+        framerNodePath: 'layout.direction',
+        designAstPath: 'layout.style.direction',
+        kind: 'string',
+        emittedAs: 'flex-row / flex-col',
+    },
+    {
+        id: 'layout.stackDistribution',
+        name: 'Stack distribution',
+        sdkAttribute: 'stackDistribution',
+        framerNodePath: 'layout.justifyContent',
+        designAstPath: 'layout.style.justifyContent',
+        kind: 'string',
+        emittedAs: 'justify-* Tailwind / inline style',
+    },
+    {
+        id: 'layout.stackAlignment',
+        name: 'Stack alignment',
+        sdkAttribute: 'stackAlignment',
+        framerNodePath: 'layout.alignItems',
+        designAstPath: 'layout.style.alignItems',
+        kind: 'string',
+        emittedAs: 'items-* Tailwind / inline style',
+    },
+    {
+        id: 'layout.stackWrapEnabled',
+        name: 'Stack wrap',
+        sdkAttribute: 'stackWrapEnabled',
+        framerNodePath: 'layout.flexWrap',
+        designAstPath: 'layout.style.flexWrap',
+        kind: 'string',
+        emittedAs: 'flex-wrap (when wrap=true) — nowrap is the documented Tailwind default and emits no extra class',
+    },
+    {
+        id: 'layout.gap',
+        name: 'Stack gap',
+        sdkAttribute: 'gap',
+        framerNodePath: 'layout.gap',
+        designAstPath: 'layout.style.gap',
+        kind: 'string',
+        emittedAs: 'gap-N Tailwind / inline style',
+    },
+    {
+        id: 'layout.padding',
+        name: 'Padding',
+        sdkAttribute: 'padding',
+        framerNodePath: 'layout.padding',
+        designAstPath: 'layout.spacing.padding',
+        kind: 'string',
+        emittedAs: 'p-/px-/py-* Tailwind / inline style',
+    },
+    {
+        id: 'layout.gridColumnCount',
+        name: 'Grid columns',
+        sdkAttribute: 'gridColumnCount',
+        framerNodePath: 'layout.columns',
+        designAstPath: 'layout.style.columns',
+        kind: 'string',
+        emittedAs: 'grid-cols-*',
+    },
+    {
+        id: 'layout.gridRowCount',
+        name: 'Grid rows',
+        sdkAttribute: 'gridRowCount',
+        framerNodePath: 'layout.rows',
+        designAstPath: 'layout.style.rows',
+        kind: 'string',
+        emittedAs: 'grid-rows-*',
+    },
     // Grid column width — Framer's per-column fixed width in pixels (typically used
     // with `auto-fill`). Generator emits `grid-template-columns: repeat(N, Xpx)`.
-    { id: 'layout.gridColumnWidth', name: 'Grid column width', sdkAttribute: 'gridColumnWidth', framerNodePath: 'layout.columnWidth', designAstPath: 'layout.style.columnWidth', kind: 'number', emittedAs: 'inline `gridTemplateColumns: repeat(<cols>, <columnWidth>px)` on grid nodes' },
+    {
+        id: 'layout.gridColumnWidth',
+        name: 'Grid column width',
+        sdkAttribute: 'gridColumnWidth',
+        framerNodePath: 'layout.columnWidth',
+        designAstPath: 'layout.style.columnWidth',
+        kind: 'number',
+        emittedAs: 'inline `gridTemplateColumns: repeat(<cols>, <columnWidth>px)` on grid nodes',
+    },
     // Grid row height — symmetric counterpart of gridColumnWidth for row sizing.
-    { id: 'layout.gridRowHeight', name: 'Grid row height', sdkAttribute: 'gridRowHeight', framerNodePath: 'layout.rowHeight', designAstPath: 'layout.style.rowHeight', kind: 'number', emittedAs: 'inline `gridTemplateRows: repeat(<rows>, <rowHeight>px)` on grid nodes' },
+    {
+        id: 'layout.gridRowHeight',
+        name: 'Grid row height',
+        sdkAttribute: 'gridRowHeight',
+        framerNodePath: 'layout.rowHeight',
+        designAstPath: 'layout.style.rowHeight',
+        kind: 'number',
+        emittedAs: 'inline `gridTemplateRows: repeat(<rows>, <rowHeight>px)` on grid nodes',
+    },
 
-    { id: 'layout.position', name: 'CSS position', sdkAttribute: 'position', framerNodePath: 'layout.position', designAstPath: 'layout.position.mode', kind: 'string', emittedAs: 'relative / absolute className or inline `position:` (static is the documented default — no extra emission)' },
-    { id: 'layout.top', name: 'Top offset', sdkAttribute: 'top', framerNodePath: 'layout.offsets.top', designAstPath: 'layout.position.top', kind: 'string', emittedAs: 'top-N inline style' },
-    { id: 'layout.right', name: 'Right offset', sdkAttribute: 'right', framerNodePath: 'layout.offsets.right', designAstPath: 'layout.position.right', kind: 'string', emittedAs: 'right-N inline style' },
-    { id: 'layout.bottom', name: 'Bottom offset', sdkAttribute: 'bottom', framerNodePath: 'layout.offsets.bottom', designAstPath: 'layout.position.bottom', kind: 'string', emittedAs: 'bottom-N inline style' },
-    { id: 'layout.left', name: 'Left offset', sdkAttribute: 'left', framerNodePath: 'layout.offsets.left', designAstPath: 'layout.position.left', kind: 'string', emittedAs: 'left-N inline style' },
-    { id: 'layout.zIndex', name: 'Stacking order', sdkAttribute: 'zIndex', framerNodePath: 'layout.zIndex', designAstPath: 'layout.position.zIndex', kind: 'number', emittedAs: 'z-N / z-[N]' },
+    {
+        id: 'layout.position',
+        name: 'CSS position',
+        sdkAttribute: 'position',
+        framerNodePath: 'layout.position',
+        designAstPath: 'layout.position.mode',
+        kind: 'string',
+        emittedAs:
+            'relative / absolute className or inline `position:` (static is the documented default — no extra emission)',
+    },
+    {
+        id: 'layout.top',
+        name: 'Top offset',
+        sdkAttribute: 'top',
+        framerNodePath: 'layout.offsets.top',
+        designAstPath: 'layout.position.top',
+        kind: 'string',
+        emittedAs: 'top-N inline style',
+    },
+    {
+        id: 'layout.right',
+        name: 'Right offset',
+        sdkAttribute: 'right',
+        framerNodePath: 'layout.offsets.right',
+        designAstPath: 'layout.position.right',
+        kind: 'string',
+        emittedAs: 'right-N inline style',
+    },
+    {
+        id: 'layout.bottom',
+        name: 'Bottom offset',
+        sdkAttribute: 'bottom',
+        framerNodePath: 'layout.offsets.bottom',
+        designAstPath: 'layout.position.bottom',
+        kind: 'string',
+        emittedAs: 'bottom-N inline style',
+    },
+    {
+        id: 'layout.left',
+        name: 'Left offset',
+        sdkAttribute: 'left',
+        framerNodePath: 'layout.offsets.left',
+        designAstPath: 'layout.position.left',
+        kind: 'string',
+        emittedAs: 'left-N inline style',
+    },
+    {
+        id: 'layout.zIndex',
+        name: 'Stacking order',
+        sdkAttribute: 'zIndex',
+        framerNodePath: 'layout.zIndex',
+        designAstPath: 'layout.position.zIndex',
+        kind: 'number',
+        emittedAs: 'z-N / z-[N]',
+    },
 
     // ── Sizing ────────────────────────────────────────────────────────
-    { id: 'sizing.width', name: 'Width', sdkAttribute: 'width', framerNodePath: 'layout.sizing.widthMode', designAstPath: 'layout.sizing.widthMode/width', kind: 'string', emittedAs: 'w-N / w-full / w-fit' },
-    { id: 'sizing.height', name: 'Height', sdkAttribute: 'height', framerNodePath: 'layout.sizing.heightMode', designAstPath: 'layout.sizing.heightMode/height', kind: 'string', emittedAs: 'h-N / h-full / h-fit' },
-    { id: 'sizing.minWidth', name: 'Min width', sdkAttribute: 'minWidth', framerNodePath: 'layout.sizing.minWidth', designAstPath: 'layout.sizing.minWidth', kind: 'string', emittedAs: 'min-w-N' },
-    { id: 'sizing.maxWidth', name: 'Max width', sdkAttribute: 'maxWidth', framerNodePath: 'layout.sizing.maxWidth', designAstPath: 'layout.sizing.maxWidth', kind: 'string', emittedAs: 'max-w-N' },
-    { id: 'sizing.minHeight', name: 'Min height', sdkAttribute: 'minHeight', framerNodePath: 'layout.sizing.minHeight', designAstPath: 'layout.sizing.minHeight', kind: 'string', emittedAs: 'min-h-N' },
-    { id: 'sizing.maxHeight', name: 'Max height', sdkAttribute: 'maxHeight', framerNodePath: 'layout.sizing.maxHeight', designAstPath: 'layout.sizing.maxHeight', kind: 'string', emittedAs: 'max-h-N' },
-    { id: 'sizing.aspectRatio', name: 'Aspect ratio', sdkAttribute: 'aspectRatio', framerNodePath: 'layout.sizing.aspectRatio', designAstPath: 'layout.sizing.aspectRatio', kind: 'number', emittedAs: 'aspect-[N/N]' },
+    {
+        id: 'sizing.width',
+        name: 'Width',
+        sdkAttribute: 'width',
+        framerNodePath: 'layout.sizing.widthMode',
+        designAstPath: 'layout.sizing.widthMode/width',
+        kind: 'string',
+        emittedAs: 'w-N / w-full / w-fit',
+    },
+    {
+        id: 'sizing.height',
+        name: 'Height',
+        sdkAttribute: 'height',
+        framerNodePath: 'layout.sizing.heightMode',
+        designAstPath: 'layout.sizing.heightMode/height',
+        kind: 'string',
+        emittedAs: 'h-N / h-full / h-fit',
+    },
+    {
+        id: 'sizing.minWidth',
+        name: 'Min width',
+        sdkAttribute: 'minWidth',
+        framerNodePath: 'layout.sizing.minWidth',
+        designAstPath: 'layout.sizing.minWidth',
+        kind: 'string',
+        emittedAs: 'min-w-N',
+    },
+    {
+        id: 'sizing.maxWidth',
+        name: 'Max width',
+        sdkAttribute: 'maxWidth',
+        framerNodePath: 'layout.sizing.maxWidth',
+        designAstPath: 'layout.sizing.maxWidth',
+        kind: 'string',
+        emittedAs: 'max-w-N',
+    },
+    {
+        id: 'sizing.minHeight',
+        name: 'Min height',
+        sdkAttribute: 'minHeight',
+        framerNodePath: 'layout.sizing.minHeight',
+        designAstPath: 'layout.sizing.minHeight',
+        kind: 'string',
+        emittedAs: 'min-h-N',
+    },
+    {
+        id: 'sizing.maxHeight',
+        name: 'Max height',
+        sdkAttribute: 'maxHeight',
+        framerNodePath: 'layout.sizing.maxHeight',
+        designAstPath: 'layout.sizing.maxHeight',
+        kind: 'string',
+        emittedAs: 'max-h-N',
+    },
+    {
+        id: 'sizing.aspectRatio',
+        name: 'Aspect ratio',
+        sdkAttribute: 'aspectRatio',
+        framerNodePath: 'layout.sizing.aspectRatio',
+        designAstPath: 'layout.sizing.aspectRatio',
+        kind: 'number',
+        emittedAs: 'aspect-[N/N]',
+    },
 
     // ── Style ─────────────────────────────────────────────────────────
-    { id: 'style.backgroundColor', name: 'Background color', sdkAttribute: 'backgroundColor', framerNodePath: 'style.fills[0].color', designAstPath: 'style.fills[0].color', kind: 'color', emittedAs: 'bg-* / tokens.yourColor' },
-    { id: 'style.backgroundGradient', name: 'Background gradient', sdkAttribute: 'backgroundGradient', framerNodePath: 'style.fills[0].gradient', designAstPath: 'style.fills[0].gradient', kind: 'gradient', emittedAs: 'inline linear/radial gradient' },
-    { id: 'style.fills', name: 'Fill list', sdkAttribute: 'fills', framerNodePath: 'style.fills', designAstPath: 'style.fills', kind: 'array', emittedAs: 'stacked CSS backgrounds / palette refs' },
-    { id: 'style.stroke', name: 'Border', sdkAttribute: 'border', framerNodePath: 'style.strokes[0]', designAstPath: 'style.strokes[0]', kind: 'object', emittedAs: 'border-* Tailwind / inline border' },
-    { id: 'style.borderRadius', name: 'Corner radius', sdkAttribute: 'borderRadius', framerNodePath: 'style.radius', designAstPath: 'style.radius', kind: 'object', emittedAs: 'rounded-N / inline border-radius' },
-    { id: 'style.shadow', name: 'Shadow', sdkAttribute: 'shadow(s)', framerNodePath: 'style.shadows[0]', designAstPath: 'style.shadows[0]', kind: 'shadow', emittedAs: 'shadow-* / inline box-shadow' },
-    { id: 'style.blur', name: 'Blur', sdkAttribute: 'blur', framerNodePath: 'style.filters[type=blur]', designAstPath: 'style.filters[type=blur]', kind: 'number', emittedAs: 'blur-N / inline filter' },
-    { id: 'style.opacity', name: 'Opacity', sdkAttribute: 'opacity', framerNodePath: 'style.opacity', designAstPath: 'style.opacity', kind: 'number', emittedAs: 'opacity-N' },
-    { id: 'style.visible', name: 'Visible', sdkAttribute: 'visible', framerNodePath: 'style.visible', designAstPath: 'style.visible', kind: 'boolean', emittedAs: 'hidden className' },
-    { id: 'style.overflow', name: 'Overflow', sdkAttribute: 'overflow', framerNodePath: 'style.overflow', designAstPath: 'style.overflow', kind: 'string', emittedAs: 'overflow-* / inline' },
-    { id: 'style.rotation', name: 'Rotation', sdkAttribute: 'rotation', framerNodePath: 'style.transform.rotate', designAstPath: 'style.transform.rotate', kind: 'number', emittedAs: '[transform:rotate(Ndeg)]' },
+    {
+        id: 'style.backgroundColor',
+        name: 'Background color',
+        sdkAttribute: 'backgroundColor',
+        framerNodePath: 'style.fills[0].color',
+        designAstPath: 'style.fills[0].color',
+        kind: 'color',
+        emittedAs: 'bg-* / tokens.yourColor',
+    },
+    {
+        id: 'style.backgroundGradient',
+        name: 'Background gradient',
+        sdkAttribute: 'backgroundGradient',
+        framerNodePath: 'style.fills[0].gradient',
+        designAstPath: 'style.fills[0].gradient',
+        kind: 'gradient',
+        emittedAs: 'inline linear/radial gradient',
+    },
+    {
+        id: 'style.fills',
+        name: 'Fill list',
+        sdkAttribute: 'fills',
+        framerNodePath: 'style.fills',
+        designAstPath: 'style.fills',
+        kind: 'array',
+        emittedAs: 'stacked CSS backgrounds / palette refs',
+    },
+    {
+        id: 'style.stroke',
+        name: 'Border',
+        sdkAttribute: 'border',
+        framerNodePath: 'style.strokes[0]',
+        designAstPath: 'style.strokes[0]',
+        kind: 'object',
+        emittedAs: 'border-* Tailwind / inline border',
+    },
+    {
+        id: 'style.borderRadius',
+        name: 'Corner radius',
+        sdkAttribute: 'borderRadius',
+        framerNodePath: 'style.radius',
+        designAstPath: 'style.radius',
+        kind: 'object',
+        emittedAs: 'rounded-N / inline border-radius',
+    },
+    {
+        id: 'style.shadow',
+        name: 'Shadow',
+        sdkAttribute: 'shadow(s)',
+        framerNodePath: 'style.shadows[0]',
+        designAstPath: 'style.shadows[0]',
+        kind: 'shadow',
+        emittedAs: 'shadow-* / inline box-shadow',
+    },
+    {
+        id: 'style.blur',
+        name: 'Blur',
+        sdkAttribute: 'blur',
+        framerNodePath: 'style.filters[type=blur]',
+        designAstPath: 'style.filters[type=blur]',
+        kind: 'number',
+        emittedAs: 'blur-N / inline filter',
+    },
+    {
+        id: 'style.opacity',
+        name: 'Opacity',
+        sdkAttribute: 'opacity',
+        framerNodePath: 'style.opacity',
+        designAstPath: 'style.opacity',
+        kind: 'number',
+        emittedAs: 'opacity-N',
+    },
+    {
+        id: 'style.visible',
+        name: 'Visible',
+        sdkAttribute: 'visible',
+        framerNodePath: 'style.visible',
+        designAstPath: 'style.visible',
+        kind: 'boolean',
+        emittedAs: 'hidden className',
+    },
+    {
+        id: 'style.overflow',
+        name: 'Overflow',
+        sdkAttribute: 'overflow',
+        framerNodePath: 'style.overflow',
+        designAstPath: 'style.overflow',
+        kind: 'string',
+        emittedAs: 'overflow-* / inline',
+    },
+    {
+        id: 'style.rotation',
+        name: 'Rotation',
+        sdkAttribute: 'rotation',
+        framerNodePath: 'style.transform.rotate',
+        designAstPath: 'style.transform.rotate',
+        kind: 'number',
+        emittedAs: '[transform:rotate(Ndeg)]',
+    },
     // CSS cursor — the SDK exposes an arbitrary CSS cursor string. Tailwind
     // only covers a small set of named cursor utilities, so the generator
     // emits the verbatim value as inline `cursor: '<value>'`.
-    { id: 'style.cursor', name: 'Cursor', sdkAttribute: 'cursor', framerNodePath: 'style.cursor', designAstPath: 'style.cursor', kind: 'string', emittedAs: 'inline `cursor: <value>` when the source specifies a cursor (Tailwind only covers named utilities like `cursor-pointer`)' },
+    {
+        id: 'style.cursor',
+        name: 'Cursor',
+        sdkAttribute: 'cursor',
+        framerNodePath: 'style.cursor',
+        designAstPath: 'style.cursor',
+        kind: 'string',
+        emittedAs:
+            'inline `cursor: <value>` when the source specifies a cursor (Tailwind only covers named utilities like `cursor-pointer`)',
+    },
     // Image rendering hint — directive for image scaling (auto, crisp-edges,
     // pixelated). Tailwind does not cover this; emitted verbatim inline.
-    { id: 'style.imageRendering', name: 'Image rendering', sdkAttribute: 'imageRendering', framerNodePath: 'style.imageRendering', designAstPath: 'style.imageRendering', kind: 'string', emittedAs: 'inline `imageRendering: <value>` when the source specifies a rendering hint' },
+    {
+        id: 'style.imageRendering',
+        name: 'Image rendering',
+        sdkAttribute: 'imageRendering',
+        framerNodePath: 'style.imageRendering',
+        designAstPath: 'style.imageRendering',
+        kind: 'string',
+        emittedAs: 'inline `imageRendering: <value>` when the source specifies a rendering hint',
+    },
 
     // ── Typography ────────────────────────────────────────────────────
-    { id: 'text.fontFamily', name: 'Font family', sdkAttribute: 'font.family', framerNodePath: 'text.style.fontFamily', designAstPath: 'text.style.fontFamily', kind: 'string', emittedAs: 'font-{family} tokens / inline style' },
-    { id: 'text.fontWeight', name: 'Font weight', sdkAttribute: 'font.weight', framerNodePath: 'text.style.fontWeight', designAstPath: 'text.style.fontWeight', kind: 'string', emittedAs: 'font-{weight} + @font-face generation' },
+    {
+        id: 'text.fontFamily',
+        name: 'Font family',
+        sdkAttribute: 'font.family',
+        framerNodePath: 'text.style.fontFamily',
+        designAstPath: 'text.style.fontFamily',
+        kind: 'string',
+        emittedAs: 'font-{family} tokens / inline style',
+    },
+    {
+        id: 'text.fontWeight',
+        name: 'Font weight',
+        sdkAttribute: 'font.weight',
+        framerNodePath: 'text.style.fontWeight',
+        designAstPath: 'text.style.fontWeight',
+        kind: 'string',
+        emittedAs: 'font-{weight} + @font-face generation',
+    },
     // `font.style` is the italic-style string the SDK exposes on each text
     // node's font face. We deliberately do NOT synthesize 'normal' on every
     // text node (that would mask genuine drops); the value is only present
     // when the source actually has italic.
-    { id: 'text.italic', name: 'Italic (font.style)', sdkAttribute: 'font.style', framerNodePath: 'text.style.italic', designAstPath: 'text.style.italic', kind: 'boolean', emittedAs: 'italic className / fontFamily variant' },
-    { id: 'text.fontSize', name: 'Font size', sdkAttribute: 'inlineTextStyle.fontSize', framerNodePath: 'text.style.fontSize', designAstPath: 'text.style.fontSize', kind: 'number', emittedAs: 'text-[Npx] / fontSize inline' },
-    { id: 'text.lineHeight', name: 'Line height', sdkAttribute: 'inlineTextStyle.lineHeight', framerNodePath: 'text.style.lineHeight', designAstPath: 'text.style.lineHeight', kind: 'number', emittedAs: 'leading-N / lineHeight inline' },
-    { id: 'text.letterSpacing', name: 'Letter spacing', sdkAttribute: 'inlineTextStyle.letterSpacing', framerNodePath: 'text.style.letterSpacing', designAstPath: 'text.style.letterSpacing', kind: 'number', emittedAs: 'tracking-N / letterSpacing inline' },
-    { id: 'text.color', name: 'Text color', sdkAttribute: 'inlineTextStyle.color', framerNodePath: 'text.style.color', designAstPath: 'text.style.color', kind: 'color', emittedAs: 'text-{color} / palette ref' },
-    { id: 'text.alignment', name: 'Text alignment', sdkAttribute: 'inlineTextStyle.alignment', framerNodePath: 'text.style.textAlign', designAstPath: 'text.style.textAlign', kind: 'string', emittedAs: 'text-{align}' },
-    { id: 'text.transform', name: 'Text transform', sdkAttribute: 'inlineTextStyle.transform', framerNodePath: 'text.style.textTransform', designAstPath: 'text.style.textTransform', kind: 'string', emittedAs: 'uppercase / lowercase / capitalize' },
-    { id: 'text.decoration', name: 'Text decoration', sdkAttribute: 'inlineTextStyle.decoration', framerNodePath: 'text.style.textDecoration', designAstPath: 'text.style.textDecoration', kind: 'string', emittedAs: 'underline / line-through' },
-    { id: 'text.italicInline', name: 'Italic (inline text style)', sdkAttribute: 'inlineTextStyle.italic', framerNodePath: 'text.style.italic', designAstPath: 'text.style.italic', kind: 'boolean', emittedAs: 'italic className / fontFamily variant' },
+    {
+        id: 'text.italic',
+        name: 'Italic (font.style)',
+        sdkAttribute: 'font.style',
+        framerNodePath: 'text.style.italic',
+        designAstPath: 'text.style.italic',
+        kind: 'boolean',
+        emittedAs: 'italic className / fontFamily variant',
+    },
+    {
+        id: 'text.fontSize',
+        name: 'Font size',
+        sdkAttribute: 'inlineTextStyle.fontSize',
+        framerNodePath: 'text.style.fontSize',
+        designAstPath: 'text.style.fontSize',
+        kind: 'number',
+        emittedAs: 'text-[Npx] / fontSize inline',
+    },
+    {
+        id: 'text.lineHeight',
+        name: 'Line height',
+        sdkAttribute: 'inlineTextStyle.lineHeight',
+        framerNodePath: 'text.style.lineHeight',
+        designAstPath: 'text.style.lineHeight',
+        kind: 'number',
+        emittedAs: 'leading-N / lineHeight inline',
+    },
+    {
+        id: 'text.letterSpacing',
+        name: 'Letter spacing',
+        sdkAttribute: 'inlineTextStyle.letterSpacing',
+        framerNodePath: 'text.style.letterSpacing',
+        designAstPath: 'text.style.letterSpacing',
+        kind: 'number',
+        emittedAs: 'tracking-N / letterSpacing inline',
+    },
+    {
+        id: 'text.color',
+        name: 'Text color',
+        sdkAttribute: 'inlineTextStyle.color',
+        framerNodePath: 'text.style.color',
+        designAstPath: 'text.style.color',
+        kind: 'color',
+        emittedAs: 'text-{color} / palette ref',
+    },
+    {
+        id: 'text.alignment',
+        name: 'Text alignment',
+        sdkAttribute: 'inlineTextStyle.alignment',
+        framerNodePath: 'text.style.textAlign',
+        designAstPath: 'text.style.textAlign',
+        kind: 'string',
+        emittedAs: 'text-{align}',
+    },
+    {
+        id: 'text.transform',
+        name: 'Text transform',
+        sdkAttribute: 'inlineTextStyle.transform',
+        framerNodePath: 'text.style.textTransform',
+        designAstPath: 'text.style.textTransform',
+        kind: 'string',
+        emittedAs: 'uppercase / lowercase / capitalize',
+    },
+    {
+        id: 'text.decoration',
+        name: 'Text decoration',
+        sdkAttribute: 'inlineTextStyle.decoration',
+        framerNodePath: 'text.style.textDecoration',
+        designAstPath: 'text.style.textDecoration',
+        kind: 'string',
+        emittedAs: 'underline / line-through',
+    },
+    {
+        id: 'text.italicInline',
+        name: 'Italic (inline text style)',
+        sdkAttribute: 'inlineTextStyle.italic',
+        framerNodePath: 'text.style.italic',
+        designAstPath: 'text.style.italic',
+        kind: 'boolean',
+        emittedAs: 'italic className / fontFamily variant',
+    },
 
     // ── Asset references ──────────────────────────────────────────────
     // asset.image has two emission signals: (1) when local bytes are
@@ -161,29 +573,141 @@ export const SOURCE_PROPERTIES: readonly SourceProperty[] = Object.freeze([
     // a remote URL is available (no bytes from the SDK), the generator
     // emits `<img src="<url>">` plus a placeholder note explaining the
     // missing local copy. The needle `'<img'` covers both signals.
-    { id: 'asset.image', name: 'Image source', sdkAttribute: 'backgroundImage | image | src | url', framerNodePath: 'image.src', designAstPath: 'asset.src', kind: 'image', emittedAs: '<img src=…> (with local copy when bytes are available, else placeholder note for the remote URL)' },
-    { id: 'asset.svg', name: 'SVG / vector', sdkAttribute: 'svg / getSVG()', framerNodePath: 'vector.svg', designAstPath: 'asset.text', kind: 'object', emittedAs: 'src/assets/svg/*.svg or inline <svg>' },
-    { id: 'asset.alt', name: 'Alt text', sdkAttribute: 'backgroundImage.altText', framerNodePath: 'image.alt', designAstPath: 'asset.alt', kind: 'string', emittedAs: '<img alt="...">' },
+    {
+        id: 'asset.image',
+        name: 'Image source',
+        sdkAttribute: 'backgroundImage | image | src | url',
+        framerNodePath: 'image.src',
+        designAstPath: 'asset.src',
+        kind: 'image',
+        emittedAs: '<img src=…> (with local copy when bytes are available, else placeholder note for the remote URL)',
+    },
+    {
+        id: 'asset.svg',
+        name: 'SVG / vector',
+        sdkAttribute: 'svg / getSVG()',
+        framerNodePath: 'vector.svg',
+        designAstPath: 'asset.text',
+        kind: 'object',
+        emittedAs: 'src/assets/svg/*.svg or inline <svg>',
+    },
+    {
+        id: 'asset.alt',
+        name: 'Alt text',
+        sdkAttribute: 'backgroundImage.altText',
+        framerNodePath: 'image.alt',
+        designAstPath: 'asset.alt',
+        kind: 'string',
+        emittedAs: '<img alt="...">',
+    },
 
     // ── Components ────────────────────────────────────────────────────
-    { id: 'component.identifier', name: 'Component identifier', sdkAttribute: 'componentIdentifier', framerNodePath: 'component.id', designAstPath: 'componentId', kind: 'string', emittedAs: 'import path key' },
-    { id: 'component.name', name: 'Component name', sdkAttribute: 'componentName', framerNodePath: 'component.name', designAstPath: 'componentName', kind: 'string', emittedAs: 'component file name' },
-    { id: 'component.props', name: 'Component props', sdkAttribute: 'controls', framerNodePath: 'component.props', designAstPath: 'props', kind: 'object', emittedAs: '<Component prop={...} /> JSX props' },
-    { id: 'component.slots', name: 'Slot placeholders', sdkAttribute: '(master body) named slot nodes', framerNodePath: 'component.slots', designAstPath: 'slots', kind: 'object', emittedAs: 'children JSX content + per-slot props' },
-    { id: 'component.master', name: 'Master body', sdkAttribute: '(canvas master)', framerNodePath: 'component.master', designAstPath: 'template.metadata.custom.masterBody', kind: 'object', emittedAs: 'export-manifest.json `fromMasters` count when ≥1 master body was preserved end-to-end' },
-    { id: 'component.code', name: 'Code component source', sdkAttribute: 'getCodeFiles()', framerNodePath: 'component.code', designAstPath: 'metadata.custom.code', kind: 'object', emittedAs: 'verbatim source under src/code/' },
+    {
+        id: 'component.identifier',
+        name: 'Component identifier',
+        sdkAttribute: 'componentIdentifier',
+        framerNodePath: 'component.id',
+        designAstPath: 'componentId',
+        kind: 'string',
+        emittedAs: 'import path key',
+    },
+    {
+        id: 'component.name',
+        name: 'Component name',
+        sdkAttribute: 'componentName',
+        framerNodePath: 'component.name',
+        designAstPath: 'componentName',
+        kind: 'string',
+        emittedAs: 'component file name',
+    },
+    {
+        id: 'component.props',
+        name: 'Component props',
+        sdkAttribute: 'controls',
+        framerNodePath: 'component.props',
+        designAstPath: 'props',
+        kind: 'object',
+        emittedAs: '<Component prop={...} /> JSX props',
+    },
+    {
+        id: 'component.slots',
+        name: 'Slot placeholders',
+        sdkAttribute: '(master body) named slot nodes',
+        framerNodePath: 'component.slots',
+        designAstPath: 'slots',
+        kind: 'object',
+        emittedAs: 'children JSX content + per-slot props',
+    },
+    {
+        id: 'component.master',
+        name: 'Master body',
+        sdkAttribute: '(canvas master)',
+        framerNodePath: 'component.master',
+        designAstPath: 'template.metadata.custom.masterBody',
+        kind: 'object',
+        emittedAs: 'export-manifest.json `fromMasters` count when ≥1 master body was preserved end-to-end',
+    },
+    {
+        id: 'component.code',
+        name: 'Code component source',
+        sdkAttribute: 'getCodeFiles()',
+        framerNodePath: 'component.code',
+        designAstPath: 'metadata.custom.code',
+        kind: 'object',
+        emittedAs: 'verbatim source under src/code/',
+    },
 
     // ── Interaction ───────────────────────────────────────────────────
-    { id: 'interaction.link', name: 'Link interaction', sdkAttribute: 'link', framerNodePath: 'interactions[type=link]', designAstPath: 'interactions.onClick[type=link]', kind: 'object', emittedAs: '<Link href="..."> or <a target="_blank">' },
+    {
+        id: 'interaction.link',
+        name: 'Link interaction',
+        sdkAttribute: 'link',
+        framerNodePath: 'interactions[type=link]',
+        designAstPath: 'interactions.onClick[type=link]',
+        kind: 'object',
+        emittedAs: '<Link href="..."> or <a target="_blank">',
+    },
 
     // ── Animation ─────────────────────────────────────────────────────
     // Every trigger uses its own predicate-keyed path so the source walker
     // counts hover/tap/mount/viewport entries separately instead of
     // collapsing every interaction with `animation` onto a single property.
-    { id: 'animation.hover', name: 'Hover animation', sdkAttribute: '(interaction.animation)', framerNodePath: 'interactions[trigger=hover].animation', designAstPath: 'animations.animations[trigger=hover]', kind: 'object', emittedAs: 'whileHover motion props' },
-    { id: 'animation.tap', name: 'Tap animation', sdkAttribute: '(interaction.animation)', framerNodePath: 'interactions[trigger=tap].animation', designAstPath: 'animations.animations[trigger=tap]', kind: 'object', emittedAs: 'whileTap motion props' },
-    { id: 'animation.mount', name: 'Mount animation', sdkAttribute: '(interaction.animation)', framerNodePath: 'interactions[trigger=animate].animation', designAstPath: 'animations.animations[trigger=mount]', kind: 'object', emittedAs: 'initial + animate motion props' },
-    { id: 'animation.viewport', name: 'Viewport animation', sdkAttribute: '(interaction.animation.viewport)', framerNodePath: 'interactions[trigger=whileInView].animation.viewport', designAstPath: 'animations.animations[trigger=viewport]', kind: 'object', emittedAs: 'whileInView motion props' },
+    {
+        id: 'animation.hover',
+        name: 'Hover animation',
+        sdkAttribute: '(interaction.animation)',
+        framerNodePath: 'interactions[trigger=hover].animation',
+        designAstPath: 'animations.animations[trigger=hover]',
+        kind: 'object',
+        emittedAs: 'whileHover motion props',
+    },
+    {
+        id: 'animation.tap',
+        name: 'Tap animation',
+        sdkAttribute: '(interaction.animation)',
+        framerNodePath: 'interactions[trigger=tap].animation',
+        designAstPath: 'animations.animations[trigger=tap]',
+        kind: 'object',
+        emittedAs: 'whileTap motion props',
+    },
+    {
+        id: 'animation.mount',
+        name: 'Mount animation',
+        sdkAttribute: '(interaction.animation)',
+        framerNodePath: 'interactions[trigger=animate].animation',
+        designAstPath: 'animations.animations[trigger=mount]',
+        kind: 'object',
+        emittedAs: 'initial + animate motion props',
+    },
+    {
+        id: 'animation.viewport',
+        name: 'Viewport animation',
+        sdkAttribute: '(interaction.animation.viewport)',
+        framerNodePath: 'interactions[trigger=whileInView].animation.viewport',
+        designAstPath: 'animations.animations[trigger=viewport]',
+        kind: 'object',
+        emittedAs: 'whileInView motion props',
+    },
 ]);
 
 /**
@@ -321,15 +845,21 @@ function toSdkShape(framerNode: FramerNode, sdkShape: Record<string, unknown>): 
     sdkShape['maxHeight'] = framerNode.layout?.sizing?.maxHeight;
     sdkShape['aspectRatio'] = framerNode.layout?.sizing?.aspectRatio;
     // Style.
-    sdkShape['backgroundColor'] = framerNode.style?.fills?.find?.((fill) => fill?.type === 'solid')?.type === 'solid'
-        ? (framerNode.style?.fills?.find?.((fill) => fill?.type === 'solid') as { color?: string } | undefined)?.color
-        : undefined;
-    sdkShape['backgroundGradient'] = framerNode.style?.fills?.find?.((fill) => fill?.type === 'linear' || fill?.type === 'radial');
+    sdkShape['backgroundColor'] =
+        framerNode.style?.fills?.find?.((fill) => fill?.type === 'solid')?.type === 'solid'
+            ? (framerNode.style?.fills?.find?.((fill) => fill?.type === 'solid') as { color?: string } | undefined)
+                  ?.color
+            : undefined;
+    sdkShape['backgroundGradient'] = framerNode.style?.fills?.find?.(
+        (fill) => fill?.type === 'linear' || fill?.type === 'radial',
+    );
     sdkShape['fills'] = framerNode.style?.fills;
     sdkShape['border'] = framerNode.style?.strokes?.[0];
     sdkShape['borderRadius'] = framerNode.style?.radius;
     sdkShape['shadow(s)'] = framerNode.style?.shadows;
-    sdkShape['blur'] = framerNode.style?.filters?.find?.((filter) => typeof filter === 'object' && (filter as { type?: string }).type === 'blur');
+    sdkShape['blur'] = framerNode.style?.filters?.find?.(
+        (filter) => typeof filter === 'object' && (filter as { type?: string }).type === 'blur',
+    );
     sdkShape['opacity'] = framerNode.style?.opacity;
     sdkShape['visible'] = framerNode.style?.visible;
     sdkShape['overflow'] = framerNode.style?.overflow;
@@ -360,8 +890,12 @@ function toSdkShape(framerNode: FramerNode, sdkShape: Record<string, unknown>): 
     sdkShape['controls'] = framerNode.component?.props;
     // Interaction.
     sdkShape['link'] = linkInteraction(framerNode);
-    sdkShape['(interaction.animation)'] = framerNode.interactions?.find?.((interaction) => interaction?.animation != null)?.animation;
-    sdkShape['(interaction.animation.viewport)'] = framerNode.interactions?.find?.((interaction) => interaction?.animation?.viewport != null)?.animation?.viewport;
+    sdkShape['(interaction.animation)'] = framerNode.interactions?.find?.(
+        (interaction) => interaction?.animation != null,
+    )?.animation;
+    sdkShape['(interaction.animation.viewport)'] = framerNode.interactions?.find?.(
+        (interaction) => interaction?.animation?.viewport != null,
+    )?.animation?.viewport;
 }
 
 /** Find the first link interaction's URL. */
@@ -373,7 +907,9 @@ function linkInteraction(framerNode: FramerNode): string | undefined {
 }
 
 /** Find the first image-bearing fill's source URL. */
-function firstImageFill(fills: ReadonlyArray<{ type?: string; image?: { src?: string } }> | undefined): string | undefined {
+function firstImageFill(
+    fills: ReadonlyArray<{ type?: string; image?: { src?: string } }> | undefined,
+): string | undefined {
     if (!fills) return undefined;
     for (const fill of fills) {
         if (fill?.type === 'image') {
@@ -475,7 +1011,11 @@ export interface CoverageReport {
  * Compute the Source Property Coverage report for a Framer document → AST →
  * generated-code pipeline run.
  */
-export function collectCoverage(input: { source: FramerDocument; ast: DesignDocument; files: VirtualFile[] }): CoverageReport {
+export function collectCoverage(input: {
+    source: FramerDocument;
+    ast: DesignDocument;
+    files: VirtualFile[];
+}): CoverageReport {
     const sourceNodes: FramerNode[] = input.source.nodes;
     const astNodes: DesignNode[] = input.ast.nodes;
 
@@ -536,7 +1076,8 @@ export function collectCoverage(input: { source: FramerDocument; ast: DesignDocu
         const emitted = emittedInCode.has(property.id);
         let stage: CoverageStage;
         if (property.unsupported) stage = 'unsupported';
-        else if (!property.emittedAs) stage = 'ast-preserved'; // No emission target: report AST fidelity only.
+        else if (!property.emittedAs)
+            stage = 'ast-preserved'; // No emission target: report AST fidelity only.
         else if (emitted) stage = 'emitted';
         else if (preserved) stage = 'ast-preserved';
         else if (discoveredCount > 0) stage = 'framer-preserved';
@@ -685,7 +1226,14 @@ export function renderCoverageText(report: CoverageReport): string {
         bucket.push(property);
         groups.set(property.stage, bucket);
     }
-    const stageOrder: CoverageStage[] = ['lost', 'unsupported', 'framer-preserved', 'ast-preserved', 'emitted', 'discovered'];
+    const stageOrder: CoverageStage[] = [
+        'lost',
+        'unsupported',
+        'framer-preserved',
+        'ast-preserved',
+        'emitted',
+        'discovered',
+    ];
     for (const stage of stageOrder) {
         const bucket = groups.get(stage);
         if (!bucket || bucket.length === 0) continue;

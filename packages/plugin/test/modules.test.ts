@@ -18,7 +18,10 @@ function memoryFetcher(sources: Record<string, string>): ModuleTextFetcher {
 
 describe('moduleExportName', () => {
     it('parses the :default suffix as the default export', () => {
-        expect(moduleExportName('module:abc/Ticker.js:default')).toEqual({ exportName: 'default', isDefaultExport: true });
+        expect(moduleExportName('module:abc/Ticker.js:default')).toEqual({
+            exportName: 'default',
+            isDefaultExport: true,
+        });
     });
 
     it('parses a named export suffix', () => {

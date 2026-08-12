@@ -2,7 +2,13 @@
  * Framer SDK node style → FramerStyle mapping.
  */
 
-import type { FramerCornerRadius, FramerFill, FramerFilter, FramerShadow, FramerStyle, FramerTransform } from '@framer/compiler-parser';
+import type {
+    FramerCornerRadius,
+    FramerFill,
+    FramerShadow,
+    FramerStyle,
+    FramerTransform,
+} from '@framer/compiler-parser';
 
 import { getSdkImageUrl, type SdkColor, type SdkNode } from './sdk-types';
 
@@ -21,7 +27,14 @@ function solidFill(color: SdkColor | null | undefined): FramerFill | undefined {
 }
 
 /** Parse a background gradient into a linear/radial fill. */
-function gradientFill(gradient?: { angle?: number | null; x?: number | null; y?: number | null; stops: Array<{ position: number; color: SdkColor }> } | null): FramerFill | undefined {
+function gradientFill(
+    gradient?: {
+        angle?: number | null;
+        x?: number | null;
+        y?: number | null;
+        stops: Array<{ position: number; color: SdkColor }>;
+    } | null,
+): FramerFill | undefined {
     if (!gradient || gradient.stops.length === 0) return undefined;
 
     const stops = gradient.stops
@@ -54,7 +67,11 @@ export function parseBorderRadius(value: string | null | undefined): number | Fr
     if (px !== undefined) return px;
 
     if (!value) return undefined;
-    const corners = value.trim().split(/\s+/).map(pxValue).filter((v): v is number => v !== undefined);
+    const corners = value
+        .trim()
+        .split(/\s+/)
+        .map(pxValue)
+        .filter((v): v is number => v !== undefined);
     if (corners.length === 4) {
         // CSS order: top-left, top-right, bottom-right, bottom-left.
         return {
@@ -112,14 +129,16 @@ export function parseStyle(node: SdkNode): FramerStyle {
     const imgUrl = getSdkImageUrl(node);
     if (imgUrl) {
         fills.push({
-            type: 'image',                image: {
-                    src: imgUrl,
-                    alt: typeof node.backgroundImage === 'object' ? node.backgroundImage?.altText : undefined,
-                    data: typeof node.backgroundImage === 'object' ? node.backgroundImage?.data : undefined,
-                    mimeType: typeof node.backgroundImage === 'object' ? node.backgroundImage?.mimeType : undefined,
-                    objectFit: typeof node.backgroundImage === 'object' ? node.backgroundImage?.objectFit : undefined,
-                    objectPosition: typeof node.backgroundImage === 'object' ? node.backgroundImage?.objectPosition : undefined,
-                },
+            type: 'image',
+            image: {
+                src: imgUrl,
+                alt: typeof node.backgroundImage === 'object' ? node.backgroundImage?.altText : undefined,
+                data: typeof node.backgroundImage === 'object' ? node.backgroundImage?.data : undefined,
+                mimeType: typeof node.backgroundImage === 'object' ? node.backgroundImage?.mimeType : undefined,
+                objectFit: typeof node.backgroundImage === 'object' ? node.backgroundImage?.objectFit : undefined,
+                objectPosition:
+                    typeof node.backgroundImage === 'object' ? node.backgroundImage?.objectPosition : undefined,
+            },
             visible: true,
         });
     }
@@ -134,7 +153,10 @@ export function parseStyle(node: SdkNode): FramerStyle {
                 const g = gradientFill(fillItem.gradient);
                 if (g) fills.push(g);
             } else if (fillItem.type === 'image') {
-                const src = typeof fillItem.image === 'string' ? fillItem.image : fillItem.image?.url ?? fillItem.image?.src ?? fillItem.url;
+                const src =
+                    typeof fillItem.image === 'string'
+                        ? fillItem.image
+                        : (fillItem.image?.url ?? fillItem.image?.src ?? fillItem.url);
                 if (src && !fills.some((existing) => existing.type === 'image' && existing.image?.src === src)) {
                     fills.push({
                         type: 'image',
@@ -143,7 +165,8 @@ export function parseStyle(node: SdkNode): FramerStyle {
                             data: typeof fillItem.image === 'object' ? fillItem.image?.data : undefined,
                             mimeType: typeof fillItem.image === 'object' ? fillItem.image?.mimeType : undefined,
                             objectFit: typeof fillItem.image === 'object' ? fillItem.image?.objectFit : undefined,
-                            objectPosition: typeof fillItem.image === 'object' ? fillItem.image?.objectPosition : undefined,
+                            objectPosition:
+                                typeof fillItem.image === 'object' ? fillItem.image?.objectPosition : undefined,
                         },
                         visible: true,
                     });
@@ -184,7 +207,7 @@ export function parseStyle(node: SdkNode): FramerStyle {
 
     // Filters / Blur
     if (node.blur) {
-        const blurValue = typeof node.blur === 'number' ? node.blur : pxValue(String(node.blur)) ?? 0;
+        const blurValue = typeof node.blur === 'number' ? node.blur : (pxValue(String(node.blur)) ?? 0);
         if (blurValue > 0) {
             style.filters = [{ type: 'blur', value: blurValue }];
         }

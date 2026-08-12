@@ -35,9 +35,7 @@ export function parseStyle(style?: FramerStyle): VisualStyle {
     }
 
     if (style.shadows) {
-        const shadows = style.shadows
-            .filter((shadow) => shadow.visible !== false)
-            .map(parseShadow);
+        const shadows = style.shadows.filter((shadow) => shadow.visible !== false).map(parseShadow);
         if (shadows.length > 0) result.shadows = shadows;
     }
 
