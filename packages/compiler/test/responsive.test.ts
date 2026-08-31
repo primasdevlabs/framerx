@@ -6,12 +6,21 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { DesignDocument, DesignNode } from '@framer/compiler-ast';
+import type { DesignDocument, DesignNode, LayoutStyle } from '@framer/compiler-ast';
 import { findFile, generateProject } from '@framer/compiler-generators';
 import { mockFramerDocument, parseFramerDocument } from '@framer/compiler-parser';
 
 import { compileFramerDocument } from '../src/index';
 import { validateExport } from '../src/validate';
+
+/**
+ * Partial layout-style fixtures: only the strategy is set. The generator
+ * treats the omitted flex/grid fields as absent (the parser's real documents
+ * always carry full objects), so supplying them here would change the emitted
+ * Tailwind classes — the cast is type-only and keeps runtime output identical.
+ */
+const FLEX_STYLE = { strategy: 'flex' } as unknown as LayoutStyle;
+const GRID_STYLE = { strategy: 'grid' } as unknown as LayoutStyle;
 
 /** A minimal container node with an explicit id/name. */
 function node(id: string, name: string, children: DesignNode[] = []): DesignNode {
@@ -21,7 +30,7 @@ function node(id: string, name: string, children: DesignNode[] = []): DesignNode
         name,
         frame: { x: 0, y: 0, width: 100, height: 100 },
         layout: {
-            style: { strategy: 'flex' },
+            style: FLEX_STYLE,
             position: { mode: 'static' },
             sizing: { widthMode: 'fixed', heightMode: 'fixed' },
             spacing: {},
@@ -209,7 +218,7 @@ describe('responsive CSS generation', () => {
             style: { visible: false },
             layout: {
                 ...node('shown-grid', 'Cards').layout,
-                style: { strategy: 'grid' },
+                style: GRID_STYLE,
                 responsive: { breakpoints: { tablet: { visible: true } } },
             },
         };
@@ -597,6 +606,44 @@ describe('responsive CSS generation', () => {
         expect(findFile(project, 'src/styles/responsive.css')).toBeUndefined();
         const main = findFile(project, 'src/main.tsx');
         expect(main!.content).not.toContain('responsive.css');
+    });
+
+    it('emits responsive.css for base-tier-only rules (no media query required)', () => {
+        // A tier at min-width 0 lands in the base tier — an unconditional rule
+        // with no @media. Gating the file on '@media' used to drop it, leaving
+        // every referenced fx-rsp class with no rule (validation failure).
+        const frameNode: DesignNode = {
+            ...node('hero', 'Hero'),
+            layout: {
+                ...node('hero', 'Hero').layout,
+                responsive: { breakpoints: { base: { visible: false } } },
+            },
+        };
+        const project = generateProject(documentWith([{ name: 'base', minWidth: 0 }], [frameNode]));
+
+        const css = findFile(project, 'src/styles/responsive.css');
+        expect(css).toBeDefined();
+        expect(css!.content).toContain('display: none');
+        expect(css!.content).not.toContain('@media');
+    });
+
+    it('resolves breakpoint tiers case-insensitively (canvas names vs scale casing)', () => {
+        // Replica overrides are keyed by the tier frame's canvas name
+        // (e.g. 'Desktop'); the breakpoint scale may spell it differently
+        // (e.g. 'desktop'). The resolver must fold the case.
+        const frameNode: DesignNode = {
+            ...node('hero', 'Hero'),
+            layout: {
+                ...node('hero', 'Hero').layout,
+                responsive: { breakpoints: { Desktop: { visible: false } } },
+            },
+        };
+        const project = generateProject(documentWith([{ name: 'desktop', minWidth: 1024 }], [frameNode]));
+
+        const css = findFile(project, 'src/styles/responsive.css');
+        expect(css).toBeDefined();
+        expect(css!.content).toContain('@media (min-width: 1024px)');
+        expect(css!.content).toContain('display: none');
     });
 });
 

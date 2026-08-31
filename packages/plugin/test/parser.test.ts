@@ -4,12 +4,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { CapabilityReport } from '../src/parser/capabilities';
 import { extractFramerDocument } from '../src/parser/document';
 import { parseLayout } from '../src/parser/layout';
 import { parseSdkNode, type ParseContext } from '../src/parser/node';
 import type { ModuleTextFetcher } from '../src/parser/modules';
-import { connectToFramer, getFramerApi, isInFramerIframe, type ExtractionStatus } from '../src/parser/sdk';
+import { connectToFramer, getFramerApi, isInFramerIframe } from '../src/parser/sdk';
 import type { SdkNode } from '../src/parser/sdk-types';
 import { parseBorderRadius, parseStyle } from '../src/parser/style';
 
@@ -36,16 +35,39 @@ interface FakeApi {
     getFonts?(): Promise<unknown[]>;
 }
 
+/**
+ * A permissive view of an extraction status record. The real type is a
+ * discriminated union keyed by `status`; tests read fields across every
+ * variant (`count`, `failed`, `reason`, …) without narrowing, so this local
+ * structural type keeps the assertions type-safe without weakening the
+ * production type.
+ */
+interface StatusRecord {
+    status: string;
+    count?: number;
+    failed?: number;
+    reason?: string;
+    unresolved?: number;
+    unsupported?: number;
+}
+
+/** A permissive view of a runtime capability probe record. */
+interface CapabilityRecord {
+    available: boolean;
+    reason?: string;
+}
+
 /** The extraction records the parser writes (the subset these tests read). */
 interface ExtractionRecord {
-    masters?: ExtractionStatus;
-    codeFiles?: ExtractionStatus;
-    fonts?: ExtractionStatus;
-    modules?: ExtractionStatus;
-    replicas?: ExtractionStatus;
+    [key: string]: unknown;
+    masters?: StatusRecord;
+    codeFiles?: StatusRecord;
+    fonts?: StatusRecord;
+    modules?: StatusRecord;
+    replicas?: StatusRecord;
     unmatchedInstances?: Array<{ id: string }>;
-    images?: ExtractionStatus;
-    capabilities?: CapabilityReport;
+    images?: StatusRecord;
+    capabilities?: Record<string, CapabilityRecord | undefined>;
 }
 
 /** Read a field off a document's extraction record (test helper). */
@@ -1064,7 +1086,7 @@ describe('shared modules', () => {
         expect(instance.component?.code?.source).toContain('export default function Ticker');
 
         // The extraction record shows the module resolved (not 'partial').
-        const extraction = (document.metadata?.extraction as { modules?: ExtractionStatus }).modules;
+        const extraction = (document.metadata?.extraction as { modules?: StatusRecord }).modules;
         expect(extraction).toEqual({ status: 'ok', count: 1 });
         // The instance was NOT recorded as unmatched — it has a real body now.
         expect((document.metadata?.extraction as { unmatchedInstances?: unknown }).unmatchedInstances).toBeUndefined();
@@ -1101,7 +1123,7 @@ describe('shared modules', () => {
         expect(fetches).toBe(1);
         expect(document.nodes[0].component?.code).toBeDefined();
         expect(document.nodes[1].component?.code).toBeDefined();
-        const extraction = (document.metadata?.extraction as { modules?: ExtractionStatus }).modules;
+        const extraction = (document.metadata?.extraction as { modules?: StatusRecord }).modules;
         expect(extraction).toEqual({ status: 'ok', count: 1 });
     });
 
@@ -1120,7 +1142,7 @@ describe('shared modules', () => {
         expect(document.nodes[0].component?.code).toBeUndefined();
         expect(document.nodes[1].component?.code).toBeUndefined();
 
-        const modules = extractionField(document, 'modules') as ExtractionStatus | undefined;
+        const modules = extractionField(document, 'modules') as StatusRecord | undefined;
         expect(modules?.status).toBe('partial');
         expect(modules?.count).toBe(0);
         expect(modules?.failed).toBe(2);
@@ -1144,7 +1166,7 @@ describe('shared modules', () => {
                 throw new Error('must not be called');
             },
         });
-        expect((document.metadata?.extraction as { modules?: ExtractionStatus }).modules).toBeUndefined();
+        expect((document.metadata?.extraction as { modules?: StatusRecord }).modules).toBeUndefined();
     });
 });
 
@@ -1439,7 +1461,7 @@ describe('project fonts', () => {
         });
         expect(document.fonts![0].sources[0].data).toEqual(new Uint8Array([4, 0, 0]));
         expect(document.fonts![1].sources[0].format).toBe('woff');
-        const fonts = extractionField(document, 'fonts') as ExtractionStatus | undefined;
+        const fonts = extractionField(document, 'fonts') as StatusRecord | undefined;
         expect(fonts?.status).toBe('ok');
         expect(fonts?.count).toBe(2);
     });
@@ -1471,7 +1493,7 @@ describe('project fonts', () => {
             sources: [],
         });
         expect(document.fonts!.find((font) => font.family === 'Inter')?.sources[0].data).toBeUndefined();
-        const fonts = extractionField(document, 'fonts') as ExtractionStatus | undefined;
+        const fonts = extractionField(document, 'fonts') as StatusRecord | undefined;
         expect(fonts?.status).toBe('partial');
         expect(fonts?.failed).toBe(1);
         expect(fonts?.reason).toContain('no downloadable source');
@@ -1483,7 +1505,7 @@ describe('project fonts', () => {
         const document = await extractFramerDocument({ ...emptyCanvas() } as never);
 
         expect(document.fonts).toBeUndefined();
-        const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
+        const fonts = (document.metadata?.extraction as { fonts?: StatusRecord }).fonts;
         expect(fonts?.status).toBe('unavailable');
     });
 
@@ -1493,7 +1515,7 @@ describe('project fonts', () => {
         const document = await extractFramerDocument(api as never);
 
         expect(document.fonts).toBeUndefined();
-        const fonts = (document.metadata?.extraction as { fonts?: ExtractionStatus }).fonts;
+        const fonts = (document.metadata?.extraction as { fonts?: StatusRecord }).fonts;
         expect(fonts?.status).toBe('empty');
     });
 });
@@ -1518,8 +1540,8 @@ describe('image extraction diagnostics (ImageAsset.getData outcomes)', () => {
     }
 
     /** Read the images extraction record off a parsed document. */
-    function imagesOf(document: { metadata?: Record<string, unknown> }): ExtractionStatus | undefined {
-        return extractionField(document, 'images') as ExtractionStatus | undefined;
+    function imagesOf(document: { metadata?: Record<string, unknown> }): StatusRecord | undefined {
+        return extractionField(document, 'images') as StatusRecord | undefined;
     }
 
     it('records ok with the count when every image resolved its original bytes via getData', async () => {
@@ -1662,8 +1684,8 @@ describe('runtime capability probe', () => {
     }
 
     /** Read the capability report off a parsed document. */
-    function capabilitiesOf(document: { metadata?: Record<string, unknown> }): CapabilityReport {
-        return (extractionField(document, 'capabilities') ?? {}) as CapabilityReport;
+    function capabilitiesOf(document: { metadata?: Record<string, unknown> }): Record<string, CapabilityRecord | undefined> {
+        return (extractionField(document, 'capabilities') ?? {}) as Record<string, CapabilityRecord | undefined>;
     }
 
     it('reports getFonts available when the live SDK object exposes it', async () => {
@@ -1682,7 +1704,7 @@ describe('runtime capability probe', () => {
         expect(getFonts?.reason).toContain('runtime capability probe');
         expect(getFonts?.reason).toContain('capability gap');
         // The fonts status derives from the probe and carries the same framing.
-        const fonts = extractionField(document, 'fonts') as ExtractionStatus | undefined;
+        const fonts = extractionField(document, 'fonts') as StatusRecord | undefined;
         expect(fonts?.status).toBe('unavailable');
         expect(fonts?.reason).toContain('capability gap');
     });
@@ -1699,7 +1721,7 @@ describe('runtime capability probe', () => {
         // The API exists (probe passes) — the partial status is a property of
         // the font (no downloadable source), explicitly NOT a missing API.
         expect(capabilitiesOf(document).getFonts).toEqual({ available: true });
-        const fonts = extractionField(document, 'fonts') as ExtractionStatus | undefined;
+        const fonts = extractionField(document, 'fonts') as StatusRecord | undefined;
         expect(fonts?.status).toBe('partial');
         expect(fonts?.reason).toContain('no downloadable source');
         expect(fonts?.reason).toContain('IS available');
@@ -1812,7 +1834,7 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
         expect(document.nodes[0].responsive).toEqual({
             Tablet: { sizing: { width: 80, height: 120 } },
         });
-        const replicas = (document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas;
+        const replicas = (document.metadata?.extraction as { replicas?: StatusRecord }).replicas;
         expect(replicas).toEqual({ status: 'ok', count: 2 });
     });
 
@@ -1829,6 +1851,32 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
         expect(document.nodes[0].responsive).toEqual({
             Mobile: { visible: false },
         });
+    });
+
+    it('derives document.breakpoints from the canvas breakpoint tier frames', async () => {
+        // The SDK v4 canvas root exposes no breakpoint scale — the tier frames
+        // in the canvas (canvas name + frame design width) ARE the document's
+        // breakpoints. Without this, folded overrides (keyed by tier name)
+        // never resolve during code generation and the responsive styles are
+        // silently dropped.
+        const api = page([
+            fakeNode({ id: 's1', name: 'Hero' }),
+            fakeNode({
+                id: 'bp_desktop',
+                name: 'Desktop',
+                isBreakpoint: true,
+                isPrimaryBreakpoint: false,
+                getRect: async () => ({ x: 0, y: 0, width: 1440, height: 900 }),
+                getChildren: async () => [
+                    fakeNode({ id: 'r_s1', name: 'Hero', isReplica: true, originalId: 's1', visible: false }),
+                ],
+            }),
+        ]);
+
+        const document = await extractFramerDocument(api as never);
+        expect(document.breakpoints).toEqual([{ name: 'Desktop', minWidth: 1440 }]);
+        // The override folds under the SAME name the breakpoint scale carries.
+        expect(document.nodes[0].responsive).toEqual({ Desktop: { visible: false } });
     });
 
     it('prunes a pure-duplicate replica without emitting any responsive override', async () => {
@@ -1855,7 +1903,7 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
         const document = await extractFramerDocument(api as never);
         // Never dropped: the orphan replica stays as an independent node.
         expect(document.nodes.map((n) => n.id)).toEqual(['s1', 'r_ghost']);
-        const replicas = extractionField(document, 'replicas') as ExtractionStatus | undefined;
+        const replicas = extractionField(document, 'replicas') as StatusRecord | undefined;
         expect(replicas?.status).toBe('partial');
         expect(replicas?.count).toBe(0);
         expect(replicas?.failed).toBe(1);
@@ -1883,7 +1931,7 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
         expect(document.nodes.map((n) => n.id)).toEqual(['s1']);
         const primary = document.nodes[0];
         expect(primary.responsive?.Tablet?.image?.src).toBe('https://cdn.test/hero-tablet.png');
-        const replicas = extractionField(document, 'replicas') as ExtractionStatus | undefined;
+        const replicas = extractionField(document, 'replicas') as StatusRecord | undefined;
         expect(replicas?.status).toBe('ok');
         expect(replicas?.count).toBe(1);
         expect(replicas?.reason).toBeUndefined();
@@ -1923,7 +1971,7 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
         const primary = document.nodes[0];
         expect(primary.type).toBe('Frame');
         expect(primary.responsive?.Tablet?.image?.src).toBe('https://cdn.test/hero-tablet.png');
-        const replicas = (document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas;
+        const replicas = (document.metadata?.extraction as { replicas?: StatusRecord }).replicas;
         expect(replicas?.status).toBe('ok');
     });
 
@@ -1974,6 +2022,6 @@ describe('replica folding (breakpoint/variant overrides vs duplicates)', () => {
     it('omits the replicas record when the document carries no replicas', async () => {
         const api = page([fakeNode({ id: 's1', name: 'Hero' })]);
         const document = await extractFramerDocument(api as never);
-        expect((document.metadata?.extraction as { replicas?: ExtractionStatus }).replicas).toBeUndefined();
+        expect((document.metadata?.extraction as { replicas?: StatusRecord }).replicas).toBeUndefined();
     });
 });

@@ -5,8 +5,52 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { DesignComponentNode, DesignDocument, DesignNode } from '@framer/compiler-ast';
+import type { DesignComponentNode, DesignDocument, DesignNode, LayoutStyle } from '@framer/compiler-ast';
+import type { CornerRadius, Fill, Stroke } from '@framer/compiler-shared';
 import { findFile, generateProject } from '@framer/compiler-generators';
+
+/**
+ * A partial flex layout-style fixture: only the strategy is set (the test
+ * builders omit flex fields; supplying them would change the emitted Tailwind
+ * classes — the cast is type-only so runtime output is unchanged).
+ */
+const FLEX_STYLE = { strategy: 'flex' } as unknown as LayoutStyle;
+
+/**
+ * Style fixtures typed against the DESIGN AST style types (whose Fill/Stroke
+ * use literal `type` discriminants and a CornerRadius object). A separate
+ * `visible`-carrying shape is NOT part of the Design AST — it lives on the
+ * Framer node style over in the plugin parser — so these fixtures use only
+ * the fields the Design AST accepts (visibility defaults to true).
+ */
+function radius(value: number): CornerRadius {
+    return { topLeft: value, topRight: value, bottomRight: value, bottomLeft: value };
+}
+
+function solid(color: string): Fill {
+    return { type: 'solid', color };
+}
+
+function linear(stops: Array<{ position: number; color: string }>, angle = 135): Fill {
+    return { type: 'linear', angle, stops };
+}
+
+function radial(center: { x: number; y: number }, radiusValue: number, stops: Array<{ position: number; color: string }>): Fill {
+    return { type: 'radial', center, radius: radiusValue, stops };
+}
+
+function stroke(color: string): Stroke {
+    return { fill: { type: 'solid', color }, width: 1, align: 'inside' };
+}
+
+interface GradientStyle {
+    fills: Fill[];
+    radius?: CornerRadius;
+}
+
+function gradientStyle(fill: Fill, value: number): GradientStyle {
+    return { fills: [fill], radius: radius(value) };
+}
 import { mockFramerDocument, parseFramerDocument } from '@framer/compiler-parser';
 
 import { compile, compileFramerDocument, extractComponents } from '../src/index';
@@ -19,12 +63,12 @@ function cardNode(id: string, title: string, body: string, accent = '#6366f1'): 
         name: 'Info Card',
         frame: { x: 0, y: 0, width: 320, height: 200 },
         layout: {
-            style: { strategy: 'flex' },
+            style: FLEX_STYLE,
             position: { mode: 'static' },
             sizing: { widthMode: 'fixed', heightMode: 'fixed' },
             spacing: {},
         },
-        style: { fills: [{ type: 'solid', color: '#ffffff', visible: true }], radius: 12 },
+        style: { fills: [solid('#ffffff')], radius: radius(12) },
         constraints: { horizontal: 'left', vertical: 'top' },
         children: [
             {
@@ -33,12 +77,12 @@ function cardNode(id: string, title: string, body: string, accent = '#6366f1'): 
                 name: 'Accent',
                 frame: { x: 0, y: 0, width: 48, height: 8 },
                 layout: {
-                    style: { strategy: 'flex' },
+                    style: FLEX_STYLE,
                     position: { mode: 'static' },
                     sizing: { widthMode: 'fixed', heightMode: 'fixed' },
                     spacing: {},
                 },
-                style: { fills: [{ type: 'solid', color: accent, visible: true }], radius: 9999 },
+                style: { fills: [solid(accent)], radius: radius(9999) },
                 constraints: { horizontal: 'left', vertical: 'top' },
                 children: [],
             },
@@ -86,7 +130,7 @@ function sectionNode(id: string, children: DesignNode[]): DesignNode {
         name: 'Cards Section',
         frame: { x: 0, y: 0, width: 1200, height: 200 },
         layout: {
-            style: { strategy: 'flex' },
+            style: FLEX_STYLE,
             position: { mode: 'static' },
             sizing: { widthMode: 'fill', heightMode: 'auto' },
             spacing: {},
@@ -147,20 +191,16 @@ describe('extractComponents', () => {
     it('treats fill structure differences as variants (solid vs gradient)', () => {
         const a = cardNode('a', 'Card A', 'Body A');
         const b = cardNode('b', 'Card B', 'Body B');
-        b.style = {
-            fills: [
-                {
-                    type: 'linear',
-                    angle: 90,
-                    stops: [
-                        { position: 0, color: '#111827' },
-                        { position: 1, color: '#000000' },
-                    ],
-                    visible: true,
-                },
-            ],
-            radius: 12,
-        };
+        b.style = gradientStyle(
+            linear(
+                [
+                    { position: 0, color: '#111827' },
+                    { position: 1, color: '#000000' },
+                ],
+                90,
+            ),
+            12,
+        );
 
         const extracted = extractComponents(makeDocument(sectionNode('s', [a, b])));
         const components = extracted.nodes.flatMap((n) => collectNodesOfType(n));
@@ -206,7 +246,7 @@ describe('extractComponents', () => {
             name: 'Card Grid',
             frame: { x: 0, y: 0, width: 680, height: 200 },
             layout: {
-                style: { strategy: 'flex' },
+                style: FLEX_STYLE,
                 position: { mode: 'static' },
                 sizing: { widthMode: 'auto', heightMode: 'auto' },
                 spacing: {},
@@ -311,7 +351,7 @@ describe('extractComponents', () => {
     it('extracts a varying root background color as the backgroundColor prop', () => {
         const card = (id: string, color: string): DesignNode => ({
             ...cardNode(id, 'T', 'B'),
-            style: { fills: [{ type: 'solid', color, visible: true }], radius: 12 },
+            style: { fills: [solid(color)], radius: radius(12) },
         });
         const extracted = extractComponents(
             makeDocument(sectionNode('s', [card('a', '#111827'), card('b', '#f8fafc')])),
@@ -323,11 +363,11 @@ describe('extractComponents', () => {
         expect(components[0].template!.metadata?.custom?.styleProps).toEqual({ backgroundColor: 'backgroundColor' });
     });
 
-    it('extracts varying radius and size as numeric props', () => {
-        const card = (id: string, radius: number, width: number): DesignNode => ({
+                it('extracts varying radius and size as numeric props', () => {
+        const card = (id: string, cardRadius: number, width: number): DesignNode => ({
             ...cardNode(id, 'T', 'B'),
             frame: { ...cardNode(id, 'T', 'B').frame, width },
-            style: { fills: [{ type: 'solid', color: '#ffffff', visible: true }], radius },
+            style: { fills: [solid('#ffffff')], radius: radius(cardRadius) },
         });
         const extracted = extractComponents(makeDocument(sectionNode('s', [card('a', 12, 380), card('b', 24, 360)])));
 
@@ -344,12 +384,12 @@ describe('extractComponents', () => {
         const filled: DesignNode = {
             ...cardNode('f', 'Primary', 'Body'),
             name: 'Primary Button',
-            style: { fills: [{ type: 'solid', color: '#6366f1', visible: true }], radius: 12 },
+            style: { fills: [solid('#6366f1')], radius: radius(12) },
         };
         const outlined: DesignNode = {
             ...cardNode('o', 'Secondary', 'Body'),
             name: 'Secondary Button',
-            style: { strokes: [{ fill: { type: 'solid', color: '#94a3b8' }, width: 1, align: 'inside' }], radius: 12 },
+            style: { strokes: [stroke('#94a3b8')], radius: radius(12) },
         };
         const extracted = extractComponents(makeDocument(sectionNode('s', [filled, outlined])));
 
@@ -371,20 +411,16 @@ describe('extractComponents', () => {
     it('renders gradient variant members as per-variant backgrounds', () => {
         const solid = cardNode('a', 'Card A', 'Body A');
         const gradient = cardNode('b', 'Card B', 'Body B');
-        gradient.style = {
-            fills: [
-                {
-                    type: 'linear',
-                    angle: 90,
-                    stops: [
-                        { position: 0, color: '#111827' },
-                        { position: 1, color: '#eef2f7' },
-                    ],
-                    visible: true,
-                },
-            ],
-            radius: 12,
-        };
+        gradient.style = gradientStyle(
+            linear(
+                [
+                    { position: 0, color: '#111827' },
+                    { position: 1, color: '#eef2f7' },
+                ],
+                90,
+            ),
+            12,
+        );
 
         const extracted = extractComponents(makeDocument(sectionNode('s', [solid, gradient])));
         const project = generateProject({
@@ -413,12 +449,12 @@ describe('extractComponents', () => {
         const a = {
             ...cardNode('a', 'One', 'Body'),
             name: 'Same Name',
-            style: { fills: [{ type: 'solid', color: '#111827', visible: true }] },
+            style: { fills: [solid('#111827')] },
         };
         const b = {
             ...cardNode('b', 'Two', 'Body'),
             name: 'Same Name',
-            style: { strokes: [{ fill: { type: 'solid', color: '#94a3b8' }, width: 1, align: 'inside' }] },
+            style: { strokes: [stroke('#94a3b8')] },
         };
         const extracted = extractComponents(makeDocument(sectionNode('s', [a, b])));
 
@@ -430,20 +466,16 @@ describe('extractComponents', () => {
     it('extracts varying gradient stops as a gradient prop', () => {
         const card = (id: string, color1: string, color2: string): DesignNode => {
             const node = cardNode(id, 'T', 'B');
-            node.style = {
-                fills: [
-                    {
-                        type: 'linear',
-                        angle: 135,
-                        stops: [
-                            { position: 0, color: color1 },
-                            { position: 1, color: color2 },
-                        ],
-                        visible: true,
-                    },
-                ],
-                radius: 12,
-            };
+            node.style = gradientStyle(
+                linear(
+                    [
+                        { position: 0, color: color1 },
+                        { position: 1, color: color2 },
+                    ],
+                    135,
+                ),
+                12,
+            );
             return node;
         };
         const extracted = extractComponents(
@@ -481,20 +513,16 @@ describe('extractComponents', () => {
             const node = cardNode(id, 'T', 'B');
             const bar = node.children[0];
             bar.name = 'Accent Gradient';
-            bar.style = {
-                fills: [
-                    {
-                        type: 'linear',
-                        angle: 90,
-                        stops: [
-                            { position: 0, color: color1 },
-                            { position: 1, color: color2 },
-                        ],
-                        visible: true,
-                    },
-                ],
-                radius: 9999,
-            };
+            bar.style = gradientStyle(
+                linear(
+                    [
+                        { position: 0, color: color1 },
+                        { position: 1, color: color2 },
+                    ],
+                    90,
+                ),
+                9999,
+            );
             return node;
         };
         const extracted = extractComponents(
@@ -531,17 +559,15 @@ describe('extractComponents', () => {
             const node = cardNode(id, 'T', 'B');
             node.style = {
                 fills: [
-                    {
-                        type: 'linear',
-                        angle: 135,
-                        stops: [
+                    linear(
+                        [
                             { position: 0, color: '#6366f1' },
                             { position: 1, color: '#8b5cf6' },
                         ],
-                        visible: true,
-                    },
+                        135,
+                    ),
                 ],
-                radius: 12,
+                radius: radius(12),
             };
             return node;
         };
@@ -573,7 +599,7 @@ describe('extractComponents', () => {
             name: 'Slot Card',
             frame: { x: 0, y: 0, width: 320, height: 200 },
             layout: {
-                style: { strategy: 'flex' },
+                style: FLEX_STYLE,
                 position: { mode: 'static' },
                 sizing: { widthMode: 'fixed', heightMode: 'fixed' },
                 spacing: {},
@@ -587,7 +613,12 @@ describe('extractComponents', () => {
                     name: 'content',
                     slotName: 'content',
                     frame: { x: 0, y: 0, width: 0, height: 0 },
-                    layout: { style: { strategy: 'auto' } },
+                    layout: {
+                        style: { strategy: 'auto' },
+                        position: { mode: 'static' },
+                        sizing: { widthMode: 'auto', heightMode: 'auto' },
+                        spacing: {},
+                    },
                     style: {},
                     constraints: { horizontal: 'left', vertical: 'top' },
                     children: [],
@@ -690,17 +721,15 @@ describe('extraction pipeline', () => {
             const node = cardNode(id, 'T', 'B');
             node.style = {
                 fills: [
-                    {
-                        type: 'linear',
-                        angle: 135,
-                        stops: [
+                    linear(
+                        [
                             { position: 0, color: color1 },
                             { position: 1, color: color2 },
                         ],
-                        visible: true,
-                    },
+                        135,
+                    ),
                 ],
-                radius: 12,
+                radius: radius(12),
             };
             return node;
         };
@@ -748,21 +777,17 @@ describe('extraction pipeline', () => {
     it('renders radial gradient props with center references', () => {
         const card = (id: string, cx: number, cy: number, color2: string): DesignNode => {
             const node = cardNode(id, 'T', 'B');
-            node.style = {
-                fills: [
-                    {
-                        type: 'radial',
-                        center: { x: cx, y: cy },
-                        radius: 0.5,
-                        stops: [
-                            { position: 0, color: '#6366f1' },
-                            { position: 1, color: color2 },
-                        ],
-                        visible: true,
-                    },
-                ],
-                radius: 12,
-            };
+            node.style = gradientStyle(
+                radial(
+                    { x: cx, y: cy },
+                    0.5,
+                    [
+                        { position: 0, color: '#6366f1' },
+                        { position: 1, color: color2 },
+                    ],
+                ),
+                12,
+            );
             return node;
         };
         const doc = makeDocument(sectionNode('s', [card('a', 0.3, 0.7, '#8b5cf6'), card('b', 0.6, 0.2, '#10b981')]));
@@ -798,23 +823,19 @@ describe('extraction pipeline', () => {
     it('carries non-even stop positions for exact fidelity', () => {
         const card = (id: string, midColor: string): DesignNode => {
             const node = cardNode(id, 'T', 'B');
-            node.style = {
-                fills: [
-                    {
-                        type: 'linear',
-                        angle: 135,
-                        stops: [
-                            { position: 0, color: '#6366f1' },
-                            // 0.125 is a common stop that whole-percent rounding
-                            // would corrupt (12.5% → 13%).
-                            { position: 0.125, color: midColor },
-                            { position: 1, color: '#8b5cf6' },
-                        ],
-                        visible: true,
-                    },
-                ],
-                radius: 12,
-            };
+            node.style = gradientStyle(
+                linear(
+                    [
+                        { position: 0, color: '#6366f1' },
+                        // 0.125 is a common stop that whole-percent rounding
+                        // would corrupt (12.5% → 13%).
+                        { position: 0.125, color: midColor },
+                        { position: 1, color: '#8b5cf6' },
+                    ],
+                    135,
+                ),
+                12,
+            );
             return node;
         };
         const doc = makeDocument(sectionNode('s', [card('a', '#10b981'), card('b', '#0ea5e9')]));
@@ -850,11 +871,11 @@ describe('extraction pipeline', () => {
         expect(file.content).toContain('Math.round(s.position * 1000) / 10');
     });
 
-    it('renders radius and size props as valid inline styles', async () => {
-        const card = (id: string, radius: number, width: number): DesignNode => ({
+                it('renders radius and size props as valid inline styles', async () => {
+        const card = (id: string, cardRadius: number, width: number): DesignNode => ({
             ...cardNode(id, 'T', 'B'),
             frame: { ...cardNode(id, 'T', 'B').frame, width },
-            style: { fills: [{ type: 'solid', color: '#ffffff', visible: true }], radius },
+            style: { fills: [solid('#ffffff')], radius: radius(cardRadius) },
         });
         const doc = makeDocument(sectionNode('s', [card('a', 12, 380), card('b', 24, 360)]));
         const extracted = extractComponents(doc);

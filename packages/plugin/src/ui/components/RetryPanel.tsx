@@ -20,9 +20,18 @@ export function RetryPanel({ reason, isRefreshing, onRetry }: RetryPanelProps) {
                 ⚠
             </div>
             <h2 className="fx-retry__title">Couldn&apos;t load the project</h2>
-            {reason && <p className="fx-retry__reason">{reason}</p>}
+            {/* The reason is the whole point of this panel — never render it
+                empty. When neither the store error nor an extraction record
+                carries one (e.g. the error was cleared by a retry race), the
+                fallback still tells the user where the real diagnostics are. */}
+            <p className="fx-retry__reason">
+                {reason ?? 'No failure reason was recorded — see the browser console for [framerx] diagnostics.'}
+            </p>
             <p className="fx-retry__hint">
                 Press Retry to rescan the project — no need to close and reopen the plugin.
+            </p>
+            <p className="fx-retry__meta">
+                bundle {__FRAMERX_BUILD_ID__} · press F12 on the Framer tab and read the [framerx] console lines
             </p>
             <button type="button" className="fx-retry__button" onClick={onRetry} disabled={isRefreshing}>
                 {isRefreshing ? 'Retrying…' : 'Retry'}

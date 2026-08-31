@@ -10,8 +10,15 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { DesignComponentNode, DesignDocument, DesignNode } from '@framer/compiler-ast';
+import type { DesignComponentNode, DesignDocument, DesignNode, LayoutStyle } from '@framer/compiler-ast';
 import { findFile, generateProject } from '@framer/compiler-generators';
+
+/**
+ * A partial flex layout-style fixture: only the strategy is set (the test
+ * builders omit flex fields; supplying them would change the emitted Tailwind
+ * classes — the cast is type-only so runtime output is unchanged).
+ */
+const FLEX_STYLE = { strategy: 'flex' } as unknown as LayoutStyle;
 import { mockFramerDocument, parseFramerDocument } from '@framer/compiler-parser';
 
 import { compileFramerDocument, optimizeDocument, separateComponents } from '../src/index';
@@ -24,7 +31,7 @@ function frameNode(id: string, name: string, children: DesignNode[], style: Desi
         name,
         frame: { x: 0, y: 0, width: 100, height: 100 },
         layout: {
-            style: { strategy: 'flex' },
+            style: FLEX_STYLE,
             position: { mode: 'static' },
             sizing: { widthMode: 'fixed', heightMode: 'fixed' },
             spacing: {},

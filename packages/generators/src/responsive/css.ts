@@ -86,13 +86,32 @@ interface ResponsiveDeclaration {
 /** The collected rules: selector → tier (min-width; 0 = base) → declarations. */
 type RuleMap = Map<string, Map<number, ResponsiveDeclaration[]>>;
 
+/**
+ * Resolve a breakpoint name to its min-width: exact match first, then a
+ * case-insensitive fallback. Replica overrides are keyed by the tier frame's
+ * canvas name (e.g. 'Desktop') while breakpoint scales may spell names
+ * differently (e.g. 'desktop') — the case fold keeps them resolvable.
+ */
+export function breakpointMinWidth(
+    breakpoints: ReadonlyMap<string, number>,
+    breakpointName: string,
+): number | undefined {
+    const exact = breakpoints.get(breakpointName);
+    if (exact !== undefined) return exact;
+    const lowered = breakpointName.toLowerCase();
+    for (const [name, minWidth] of breakpoints) {
+        if (name.toLowerCase() === lowered) return minWidth;
+    }
+    return undefined;
+}
+
 /** Generate the responsive.css file for a document. */
-export function generateResponsiveCss(document: DesignDocument, assetPaths?: ReadonlyMap<string, string>): VirtualFile {
+export function generateResponsiveCss(document: DesignDocument, assetPaths?: ReadonlyMap<string, string>): VirtualFile | null {
     const breakpoints = new Map(document.breakpoints.map((bp) => [bp.name, bp.minWidth]));
     const rules: RuleMap = new Map();
 
     /** Resolve a breakpoint name to its min-width (undefined when unknown). */
-    const minWidthOf = (breakpointName: string): number | undefined => breakpoints.get(breakpointName);
+    const minWidthOf = (breakpointName: string): number | undefined => breakpointMinWidth(breakpoints, breakpointName);
 
     const add = (node: DesignNode, minWidth: number, declarations: ResponsiveDeclaration[]): void => {
         if (declarations.length === 0) return;
@@ -138,6 +157,12 @@ export function generateResponsiveCss(document: DesignDocument, assetPaths?: Rea
             add(node, minWidth, [{ property: 'display', value: 'none' }]);
         }
     });
+
+    // Nothing responsive resolved → no file at all (the main entry then also
+    // skips the responsive.css import). Base-tier-only rules DO count: they
+    // are unconditional selectors without a media query, and gating on
+    // '@media' used to drop them, leaving referenced classes with no rule.
+    if (rules.size === 0) return null;
 
     const content = renderRules(rules);
     return {

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "include": [
+    "packages/compiler/test/**/*",
+    "packages/compiler/src/**/*",
+    "packages/plugin/test/**/*",
+    "packages/plugin/src/**/*",
+    "packages/plugin/vite.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", "**/dist/**"]
+}

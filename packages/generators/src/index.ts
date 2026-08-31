@@ -215,15 +215,19 @@ export function generateProject(
     const sectionNames = assignUniqueNames(document.nodes.map((node) => sanitizeComponentName(node.name)));
 
     // Responsive styles: emitted only when the document actually defines
-    // responsive behavior (media queries at the document's own breakpoints).
+    // responsive behavior (media queries at the document's own breakpoints,
+    // or base-tier rules). `generateResponsiveCss` returns null when no
+    // rule resolved — never gate on the file containing '@media': a document
+    // whose responsive rules all land in the base tier has none, and dropping
+    // the file would leave every referenced class without a rule.
     const responsiveCss = generateResponsiveCss(document, assetPaths);
 
     // The document's breakpoint thresholds (name → min-width), threaded into
     // the section/component generators so responsive image swaps emit
     // `<source media>` per tier at the document's own widths.
     const breakpoints = new Map(document.breakpoints.map((bp) => [bp.name, bp.minWidth]));
-    const hasResponsive = responsiveCss.content.includes('@media');
-    if (hasResponsive) files.push(responsiveCss);
+    const hasResponsive = responsiveCss !== null;
+    if (responsiveCss) files.push(responsiveCss);
 
     // App entry files
     files.push(generateApp(document, sectionNames));

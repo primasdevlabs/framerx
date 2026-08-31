@@ -129,6 +129,13 @@ export interface ExtractFramerDocumentOptions {
      * so tests can verify the timeout path without waiting 10s.
      */
     sdkCallTimeoutMs?: number;
+    /**
+     * Load-progress callback for UIs — called at extraction milestones
+     * (canvas read, fonts, components, code files, node-walk progress).
+     * A large canvas walks hundreds of postMessage round-trips, which can
+     * take tens of seconds: the loading UI must show progress, not silence.
+     */
+    onProgress?: (phase: string) => void;
 }
 
 /** Font file formats the registry can emit. */
@@ -166,15 +173,15 @@ async function collectProjectFonts(
     fetcher: FontBytesFetcher,
     fontsProbe: CapabilityProbe,
     callTimeout: number,
+    onProgress?: (phase: string) => void,
 ): Promise<{ fonts: FramerFontAsset[]; status: ExtractionStatus }> {
-    const fonts: FramerFontAsset[] = [];
     if (typeof api.getFonts !== 'function') {
         // The probe (passed in) classified this as an SDK capability gap — its
         // reason names the missing method and the consequence. Reused verbatim
         // so the diagnostics say WHY, and never confuse this with fonts that
         // genuinely have no downloadable source (a present API + url: null).
         return {
-            fonts,
+            fonts: [],
             status: {
                 status: 'unavailable',
                 reason: fontsProbe.available
@@ -188,12 +195,12 @@ async function collectProjectFonts(
     try {
         sdkFonts = await withTimeout(api.getFonts(), callTimeout, 'getFonts()');
     } catch (error) {
-        return { fonts, status: classifyError('getFonts()', error) };
+        return { fonts: [], status: classifyError('getFonts()', error) };
     }
 
     if (sdkFonts.length === 0) {
         return {
-            fonts,
+            fonts: [],
             status: {
                 status: 'empty',
                 reason: 'getFonts resolved but returned no fonts (custom fonts are not exposed to plugins).',
@@ -201,30 +208,68 @@ async function collectProjectFonts(
         };
     }
 
-    let withSource = 0;
+    // Download all font files IN PARALLEL (bounded) instead of one-by-one:
+    // every entry is its own downloadable file, and a sequential walk of
+    // slow font CDNs stalled the whole load with no visible progress — the
+    // single worst "stuck loading" offender on font-heavy projects.
+    interface PendingFont {
+        slot: number;
+        family: string;
+        weight: number;
+        style: FramerFontAsset['style'];
+        url: string;
+        format: FramerFontAsset['sources'][number]['format'];
+    }
+    const slots: (FramerFontAsset | null)[] = new Array(sdkFonts.length).fill(null);
     const noSource: string[] = [];
-    for (const sdkFont of sdkFonts) {
+    const pending: PendingFont[] = [];
+    let withSource = 0;
+
+    sdkFonts.forEach((sdkFont, slot) => {
         const family = sdkFont.family?.trim();
-        if (!family) continue;
+        if (!family) return;
         const weight = typeof sdkFont.weight === 'number' ? sdkFont.weight : 400;
         const style: FramerFontAsset['style'] = sdkFont.style === 'italic' ? 'italic' : 'normal';
 
         if (!sdkFont.url) {
             noSource.push(family);
-            fonts.push({ family, weight, style, sources: [] });
-            continue;
+            slots[slot] = { family, weight, style, sources: [] };
+            return;
         }
 
-        const format = fontFormatFromUrl(sdkFont.url);
-        const bytes = await fetcher(sdkFont.url);
-        fonts.push({
+        withSource += 1;
+        pending.push({
+            slot,
             family,
             weight,
             style,
-            sources: [{ url: sdkFont.url, format, ...(bytes ? { data: bytes } : {}) }],
+            url: sdkFont.url,
+            format: fontFormatFromUrl(sdkFont.url),
         });
-        withSource += 1;
-    }
+    });
+
+    const CONCURRENCY = 6;
+    let downloaded = 0;
+    const queue = [...pending];
+    await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+            for (;;) {
+                const font = queue.shift();
+                if (!font) return;
+                const bytes = await fetcher(font.url);
+                slots[font.slot] = {
+                    family: font.family,
+                    weight: font.weight,
+                    style: font.style,
+                    sources: [{ url: font.url, format: font.format, ...(bytes ? { data: bytes } : {}) }],
+                };
+                downloaded += 1;
+                onProgress?.(`Reading fonts… ${downloaded}/${pending.length}`);
+            }
+        }),
+    );
+
+    const fonts = slots.filter((font): font is FramerFontAsset => font !== null);
 
     const status: ExtractionStatus =
         noSource.length === 0
@@ -547,6 +592,9 @@ export async function extractFramerDocument(
     // recorded so a timed-out / denied canvas root is never a SILENT empty
     // state (the export diagnostics can say the engine did not answer).
     const callTimeout = options.sdkCallTimeoutMs ?? SDK_CALL_TIMEOUT_MS;
+    const onProgress = options.onProgress;
+    const startedAt = Date.now();
+    onProgress?.('Reading the canvas…');
     let root: FramerCanvasRoot | null = null;
     let rootError: string | null = null;
     try {
@@ -649,19 +697,23 @@ export async function extractFramerDocument(
     // never silently dropped. The runtime capability probe runs first so the
     // "API missing" (SDK surface gap) and "font has no downloadable source"
     // (custom font) cases are never conflated in the diagnostics.
+    onProgress?.('Reading fonts…');
     const fontsProbe = probeFontsCapability(api);
     const fontFetch = await collectProjectFonts(
         api,
         options.fontFetcher ?? defaultFontBytesFetcher,
         fontsProbe,
         callTimeout,
+        onProgress,
     );
 
     // Component masters give every instance its real definition body (slot
     // positions + per-slot props) instead of a synthesized approximation.
+    onProgress?.('Reading components…');
     const masters = await fetchComponentMasters(api, callTimeout);
     // Code files give every code-component instance its REAL source — the
     // true implementation instead of a synthesized approximation.
+    onProgress?.('Reading code files…');
     const codeFiles = await fetchCodeFiles(api, callTimeout);
     const context: ParseContext = {
         masters: masters.map,
@@ -681,10 +733,13 @@ export async function extractFramerDocument(
     };
 
     const walkedNodes: FramerNode[] = [];
+    let walked = 0;
+    const progressEvery = 25;
     // v4: the ACTIVE page's own children are top-level content (the root IS
     // the active page). Walk them first so the current canvas is never empty.
     for (const child of flatCanvasChildren) {
         walkedNodes.push(await safeParseNode(child, context));
+        if (++walked % progressEvery === 0) onProgress?.(`Reading nodes… ${walked}`);
     }
     for (const page of pages) {
         // A page the SDK cannot walk must not abort the whole extraction —
@@ -697,14 +752,17 @@ export async function extractFramerDocument(
         }
         for (const child of children) {
             walkedNodes.push(await safeParseNode(child, context));
+            if (++walked % progressEvery === 0) onProgress?.(`Reading nodes… ${walked}`);
         }
     }
     // Diagnostic: a zero-scan is immediately visible in the dev tools instead
     // of a silent empty state. The page count is the active root (when its
     // children were walked as content) plus the enumerated additional pages.
+    const elapsedSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
     console.info(
-        `[framerx] extracted ${walkedNodes.length} top-level node(s) across ${(flatCanvasChildren.length > 0 ? 1 : 0) + pages.length} canvas page(s)`,
+        `[framerx] extracted ${walkedNodes.length} top-level node(s) across ${(flatCanvasChildren.length > 0 ? 1 : 0) + pages.length} canvas page(s) in ${elapsedSeconds}s`,
     );
+    onProgress?.('Building the document…');
 
     // Responsive replicas (SDK `isReplica`) are breakpoint/variant OVERRIDES
     // of a primary node, not duplicated content: fold each replica's
@@ -773,13 +831,38 @@ export async function extractFramerDocument(
         },
     };
 
-    // Responsive breakpoints come from the source when the SDK exposes them;
-    // otherwise the compiler falls back to its default scale.
+    // Responsive breakpoints: prefer an explicit SDK scale; otherwise derive
+    // the scale from the canvas's own breakpoint tier frames (name + design
+    // width). The SDK v4 canvas root exposes NO breakpoint scale, so without
+    // the tier-derived fallback every folded override (keyed by tier name)
+    // fails to resolve during code generation and the responsive styles are
+    // silently dropped.
     if (Array.isArray(root.breakpoints) && root.breakpoints.length > 0) {
         document.breakpoints = root.breakpoints.map((bp) => ({ name: bp.name, minWidth: bp.minWidth }));
+    } else {
+        const tiers = collectBreakpointTiers(walkedNodes);
+        if (tiers.length > 0) document.breakpoints = tiers;
     }
 
     return document;
+}
+
+/**
+ * Breakpoint tiers discovered in the parsed canvas: non-primary breakpoint
+ * frames (`source.isBreakpoint`), keyed by their canvas name — the EXACT key
+ * replica overrides are folded under — with the frame's design width as the
+ * mobile-first min-width. Sorted smallest first.
+ */
+function collectBreakpointTiers(nodes: FramerNode[]): Array<{ name: string; minWidth: number }> {
+    const byName = new Map<string, { name: string; minWidth: number }>();
+    for (const node of nodes) {
+        if (node.source?.isBreakpoint !== true) continue;
+        const name = node.name?.trim();
+        const width = node.frame?.width ?? 0;
+        if (!name || width <= 0) continue;
+        if (!byName.has(name)) byName.set(name, { name, minWidth: Math.round(width) });
+    }
+    return [...byName.values()].sort((a, b) => a.minWidth - b.minWidth);
 }
 
 /**

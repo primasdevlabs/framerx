@@ -8,6 +8,7 @@ import { normalizeColor, pxToTailwindSpacing, sanitizeComponentName, toVariableN
 
 import { collectBodySlots, propTypeToTs, slotPropName } from '../components/model';
 import { generateMotionProps, type MotionProps } from '../motion/animation';
+import { breakpointMinWidth } from '../responsive/css';
 import { generateClasses } from '../tailwind/classes';
 import {
     COLOR_STYLE_FIELDS,
@@ -997,7 +998,9 @@ function responsiveImageTiers(
         // as the last source in tree order, shadow the <img> fallback
         // everywhere: the wrong image at every size. A real min-width-0
         // breakpoint still resolves (the map returns 0, not undefined).
-        const minWidth = breakpoints?.get(breakpointName);
+        // Case-insensitive: tier names come from the canvas (e.g. 'Desktop')
+        // while the scale may spell them differently (e.g. 'desktop').
+        const minWidth = breakpoints ? breakpointMinWidth(breakpoints, breakpointName) : undefined;
         if (minWidth === undefined) continue;
         tiers.push({ minWidth, src });
     }

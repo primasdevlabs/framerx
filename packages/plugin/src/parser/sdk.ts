@@ -379,8 +379,25 @@ export async function isStandaloneEnvironment(): Promise<boolean> {
  * lost handshake never leaves the module stuck and is retryable. Returns null
  * only when no engine is reachable (browser preview, or the engine never
  * responded after all attempts).
+ *
+ * Concurrent callers SHARE one connect attempt: every call site (showUI in
+ * `main.tsx`, the document loader, a manual rescan) posts the plugin-ready
+ * signal, and the Framer host's PluginHealth machinery logs an assertion for
+ * each redundant signal it receives while it considers the plugin in the
+ * wrong lifecycle state — so duplicate connect loops are message noise, not
+ * just wasted work.
  */
-export async function connectToFramer(): Promise<FramerApi | null> {
+let connectPromise: Promise<FramerApi | null> | null = null;
+
+export function connectToFramer(): Promise<FramerApi | null> {
+    if (connectPromise) return connectPromise;
+    connectPromise = connectToFramerOnce().finally(() => {
+        connectPromise = null;
+    });
+    return connectPromise;
+}
+
+async function connectToFramerOnce(): Promise<FramerApi | null> {
     if (isStandaloneForced()) return null;
     if (!isInFramerIframe()) return null;
 

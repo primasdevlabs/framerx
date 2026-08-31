@@ -587,6 +587,14 @@ body {
     color: var(--fx-text-faint);
 }
 
+.fx-retry__meta {
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--fx-text-faint);
+    opacity: 0.85;
+}
+
 .fx-retry__button {
     margin-top: 6px;
     min-width: 140px;

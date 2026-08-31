@@ -44,6 +44,8 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
     const setMode = usePluginStore((state) => state.setMode);
     const setApi = usePluginStore((state) => state.setApi);
     const setDocument = usePluginStore((state) => state.setDocument);
+    const setLoadPhase = usePluginStore((state) => state.setLoadPhase);
+    const setLoadedDocument = usePluginStore((state) => state.setLoadedDocument);
     const setError = usePluginStore((state) => state.setError);
     const setRefreshing = usePluginStore((state) => state.setRefreshing);
     const isRefreshing = usePluginStore((state) => state.isRefreshing);
@@ -57,7 +59,13 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
         let unsubscribeCanvas: (() => void) | undefined;
 
         async function init(): Promise<void> {
+            // Lifecycle breadcrumbs — the console on the Framer tab tells the
+            // whole load story ([framerx] lines), which is how a reported
+            // "Couldn't load the project" gets diagnosed without guessing.
+            console.info('[framerx] connecting to the Framer engine…');
+            setLoadPhase('Connecting to Framer…');
             const api = await connectToFramer();
+            console.info(`[framerx] connect ${api ? 'succeeded' : 'FAILED — no engine answered'}`);
             if (cancelled) return;
             apiRef.current = api;
             // The live connection is shared with the export runner so the SDK
@@ -68,6 +76,7 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
                 // Inside the Framer host but no engine answered (handshake
                 // timeout): report it instead of silently showing the mock
                 // document — the user asked for their project, not a demo.
+                setLoadPhase(null);
                 if (isInFramerIframe()) {
                     setMode('framer');
                     setError(connectErrorMessage());
@@ -81,10 +90,23 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
                 return;
             }
 
-            setMode('framer');
+            // NOTE: mode stays 'loading' while the extraction runs. Flipping to
+            // 'framer' here — before a document exists — would render the
+            // retry panel ("Couldn't load the project") for the whole duration
+            // of a slow extraction on a large canvas.
             try {
-                const document = await extractFramerDocument(api);
-                if (!cancelled) setDocument(document);
+                console.info('[framerx] extracting the project…');
+                const document = await extractFramerDocument(api, {
+                    onProgress: (phase) => {
+                        if (!cancelled) setLoadPhase(phase);
+                    },
+                });
+                console.info(
+                    `[framerx] project loaded: "${document.name}" — ${document.nodes.length} top-level node(s)`,
+                );
+                // Atomic: mode + document flip together, so the retry-panel
+                // predicate never sees mode 'framer' with no document.
+                if (!cancelled) setLoadedDocument(document);
 
                 // Refresh the document when the canvas changes. A failed
                 // re-extraction must not become an unhandled rejection — it
@@ -101,7 +123,13 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
                         });
                 });
             } catch (error) {
+                console.error('[framerx] project load failed:', error);
                 if (!cancelled) {
+                    // A real failure: only NOW does the retry panel become
+                    // truthful. Flip into framer mode with the error set so
+                    // the panel shows the concrete reason.
+                    setMode('framer');
+                    setLoadPhase(null);
                     setError(error instanceof Error ? error.message : String(error));
                 }
             }
@@ -114,7 +142,7 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
             unsubscribeCanvas?.();
             setApi(null);
         };
-    }, [setMode, setApi, setDocument, setError]);
+    }, [setMode, setApi, setDocument, setLoadPhase, setLoadedDocument, setError]);
 
     /**
      * Rescan the Framer project: re-extract the document from the engine and
@@ -144,7 +172,10 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
             }
             apiRef.current = api;
             setMode('framer');
-            const document = await extractFramerDocument(api);
+            setLoadPhase('Rescanning the project…');
+            const document = await extractFramerDocument(api, {
+                onProgress: (phase) => setLoadPhase(phase),
+            });
             setDocument(document);
             return true;
         } catch (error) {
@@ -152,8 +183,9 @@ export function useFramerDocument(): { refreshDocument: () => Promise<boolean> }
             return false;
         } finally {
             setRefreshing(false);
+            setLoadPhase(null);
         }
-    }, [isRefreshing, setApi, setDocument, setError, setMode, setRefreshing]);
+    }, [isRefreshing, setApi, setDocument, setLoadPhase, setError, setMode, setRefreshing]);
 
     return { refreshDocument };
 }

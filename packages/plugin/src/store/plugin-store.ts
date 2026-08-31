@@ -60,6 +60,8 @@ interface PluginState {
     status: ExportStatus;
     /** Whether a manual refresh (rescan the Framer project) is in progress. */
     isRefreshing: boolean;
+    /** Human-readable progress during the initial load / refresh (loading bar). */
+    loadPhase: string | null;
     /** The last export error message. */
     error: string | null;
     /** The last successful export summary. */
@@ -72,6 +74,13 @@ interface PluginState {
     setDocument(document: FramerDocument | null): void;
     setStatus(status: ExportStatus): void;
     setRefreshing(isRefreshing: boolean): void;
+    setLoadPhase(loadPhase: string | null): void;
+    /**
+     * Atomically flip into framer mode WITH a loaded document. Setting the two
+     * separately would render one frame where mode === 'framer' && document ===
+     * null — which the retry-panel logic reads as a failed load.
+     */
+    setLoadedDocument(document: FramerDocument): void;
     setError(error: string | null): void;
     setSummary(summary: ExportSummary | null): void;
     setOptions(options: Partial<ExportOptions>): void;
@@ -91,6 +100,7 @@ export const usePluginStore = create<PluginState>((set) => ({
     document: null,
     status: 'idle',
     isRefreshing: false,
+    loadPhase: null,
     error: null,
     summary: null,
     options: { ...DEFAULT_OPTIONS },
@@ -100,6 +110,8 @@ export const usePluginStore = create<PluginState>((set) => ({
     setDocument: (document) => set({ document }),
     setStatus: (status) => set({ status }),
     setRefreshing: (isRefreshing) => set({ isRefreshing }),
+    setLoadPhase: (loadPhase) => set({ loadPhase }),
+    setLoadedDocument: (document) => set({ mode: 'framer', document, loadPhase: null }),
     setError: (error) => set({ error }),
     setSummary: (summary) => set({ summary }),
     setOptions: (options) => set((state) => ({ options: { ...state.options, ...options } })),

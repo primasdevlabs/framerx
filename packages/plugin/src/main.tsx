@@ -10,6 +10,11 @@ import { connectToFramer } from './parser/sdk';
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element not found');
 
+// Breadcrumb: the running bundle's identity — a load failure reported from a
+// bundle whose id does not match the latest build means a stale serve, not a
+// code bug (e.g. an old `dist` or a cached dev tab).
+console.info(`[framerx] plugin bundle ${__FRAMERX_BUILD_ID__} (${import.meta.env.MODE})`);
+
 // Open the plugin panel when running inside the Framer runtime. connectToFramer
 // waits (with retry) for the engine handshake, so a slow cold start still opens
 // the panel; outside Framer it resolves null and nothing happens.

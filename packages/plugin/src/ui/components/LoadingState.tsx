@@ -1,8 +1,14 @@
+import { usePluginStore } from '../../store/plugin-store';
+
 export function LoadingState() {
+    // Live progress: the extraction reports milestones (canvas, fonts,
+    // components, node-walk progress) while mode is still 'loading' — a long
+    // walk over a large canvas must look like progress, not like a failure.
+    const phase = usePluginStore((state) => state.loadPhase);
     return (
         <div className="fx-loading">
             <div className="fx-loading__bar" />
-            <span>Connecting to Framer…</span>
+            <span>{phase ?? 'Connecting to Framer…'}</span>
         </div>
     );
 }
