@@ -268,7 +268,14 @@ export async function validateExport(
     }
 
     // ── Syntax + imports + asset references per text file ──────────────────
-    const syntaxByPath = await validateFilesSyntax(files);
+    // Shared module bundles (src/code/*.js) are opaque third-party JS fetched
+    // from Framer's CDN. They may contain minification artifacts or advanced
+    // syntax that Prettier's standalone Babel parser rejects ("Missing
+    // semicolon"). Since the compiler emits them verbatim, syntax-validating
+    // them would block exports for code the compiler did not produce. Only
+    // validate files the compiler itself generates.
+    const syntaxCandidates = files.filter((f) => !f.path.startsWith('src/code/'));
+    const syntaxByPath = await validateFilesSyntax(syntaxCandidates);
     for (const [path, issues] of syntaxByPath) {
         for (const issue of issues) {
             errors.push({

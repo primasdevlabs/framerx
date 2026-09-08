@@ -43,6 +43,17 @@ ${sectionElements}
     };
 }
 
+/** The anchor id for a section output name (`HeroSection` → `hero`). */
+export function sectionAnchorId(sectionName: string): string {
+    const kebab = sectionName
+        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    const clean = kebab.replace(/-section$/, '');
+    return clean || kebab;
+}
+
 /** The anchor class for a section output name (`HeroImage` → `section-hero-image`). */
 function sectionClassName(sectionName: string): string {
     const kebab = sectionName

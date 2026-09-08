@@ -33,13 +33,13 @@ exports[`golden master-backed document > matches the golden snapshot of the gene
     "unsupported": 0
   },
   "animations": {
-    "reproduced": 40
+    "reproduced": 41
   },
   "coverage": {
     "registered": 66,
     "discovered": 21,
     "preserved": 24,
-    "emitted": 40,
+    "emitted": 41,
     "unsupported": 0,
     "lost": 0,
     "properties": [
@@ -352,7 +352,7 @@ exports[`golden master-backed document > matches the golden snapshot of the gene
       {
         "id": "style.rotation",
         "sdkAttribute": "rotation",
-        "stage": "discovered",
+        "stage": "emitted",
         "discoveredCount": 0
       },
       {
@@ -555,7 +555,8 @@ export default tseslint.config(
     "dependencies": {
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
-        "motion": "^12.0.0"
+        "motion": "^12.0.0",
+        "framer-motion": "^12.0.0"
     },
     "devDependencies": {
         "@types/react": "^19.0.0",

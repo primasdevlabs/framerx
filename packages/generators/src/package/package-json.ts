@@ -33,6 +33,7 @@ export function generatePackageJson(projectName: string, extraDependencies: Reco
                 react: '^19.0.0',
                 'react-dom': '^19.0.0',
                 motion: '^12.0.0',
+                'framer-motion': '^12.0.0',
                 ...extraDependencies,
             },
             devDependencies: {

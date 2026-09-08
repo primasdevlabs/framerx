@@ -44,9 +44,13 @@ export function generateMotionProps(node: DesignNode): MotionProps {
                 result.whileFocus = formatAnimatedProperties(animation.properties);
                 break;
             case 'viewport':
+            case 'scroll':
                 result.whileInView = formatAnimatedProperties(animation.properties);
                 if (animation.initial && Object.keys(animation.initial).length > 0) {
                     result.initial = formatAnimatedProperties(animation.initial);
+                }
+                if (animation.viewport) {
+                    result.viewport = formatViewport(animation.viewport);
                 }
                 break;
             case 'initial':
@@ -59,9 +63,12 @@ export function generateMotionProps(node: DesignNode): MotionProps {
                 break;
         }
 
-        // Transition config
+        // Transition config (merge if multiple exist)
         if (animation.config) {
-            result.transition = formatTransition(animation.config);
+            const transitionConfig = formatTransition(animation.config);
+            result.transition = result.transition
+                ? { ...result.transition, ...transitionConfig }
+                : transitionConfig;
         }
     }
 
